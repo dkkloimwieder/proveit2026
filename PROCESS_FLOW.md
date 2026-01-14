@@ -145,6 +145,17 @@ WO-Lxx-xxxx-Pxx
 └─────────────── Prefix
 ```
 
+**CRITICAL: Line codes ARE stage-specific:**
+- `L01`, `L02` = **MIX stage ONLY** (liquidprocessing/mixroom)
+- `L03`, `L04` = **FILL and PACK stages** (fillerproduction, packaging)
+
+**Stage Linkage:**
+- MIX → FILL: **DISCONNECTED** - Different WO series (L01/L02 vs L03/L04)
+- FILL → PACK: **CONNECTED** - Same base WO + `-Pxx` suffix
+
+**Why MIX is disconnected?** Mixing is a batch process producing bulk liquid in tanks.
+Multiple FILL orders can draw from the same mix batch - no 1:1 WO tracking.
+
 **Key insight**: The `-Pxx` suffix indicates the **final pack size** for that production run.
 
 ## Work Order Progression Example

@@ -1,5 +1,5 @@
 # Enterprise B Data Analysis Report
-# Generated: 2026-01-14T14:09:23.848510
+# Generated: 2026-01-14T14:34:37.889541
 # Database: proveit.db
 
 ================================================================================
@@ -12,57 +12,57 @@ work_orders   26      Work Orders
 products      9       Products             
 lots          33      Lots                 
 assets        121     Assets               
-states        12      States               
-events        273     Events               
-metrics_10s   6873    Metrics (10s buckets)
-messages_raw  419700  Raw Messages         
+states        13      States               
+events        354     Events               
+metrics_10s   11252   Metrics (10s buckets)
+messages_raw  686200  Raw Messages         
 
 Data collection period:
   From: 2026-01-14 18:29:51
-  To:   2026-01-14 19:09:21
-  Duration: 0.66 hours
+  To:   2026-01-14 19:34:31
+  Duration: 1.08 hours
 
 ================================================================================
 WORK ORDER STATUS ANALYSIS (proveit2026-kax)
 ================================================================================
 
-WO Number        Site   Line           UOM     Target  Actual  Status       %Complete
--------------------------------------------------------------------------------------
-WO-L01-0172      Site1  mixroom01      -       36000   10762   STARTING     29.9     
-WO-L01-0172      Site2  labelerline01  bottle  4875    858     STARTING     17.6     
-WO-L01-0880      Site1  mixroom01      bottle  9000    11493   COMPLETE     127.7    
-WO-L01-0880      Site3  fillingline01  kg      3900    3508    IN_PROGRESS  89.9     
-WO-L02-0193      Site1  labelerline03  bottle  7000    10300   COMPLETE     147.1    
-WO-L02-0193      Site3  mixroom01      bottle  36000   9950    STARTING     27.6     
-WO-L02-0239      Site1  labelerline03  CS      42000   14714   STARTING     35.0     
-WO-L02-0285      Site1  fillingline03  CS      2100    1898    IN_PROGRESS  90.4     
-WO-L02-0503      Site1  labelerline02  CS      2100    13207   COMPLETE     628.9    
-WO-L03-0948      Site1  labelerline04  CS      3000    47389   COMPLETE     1579.6   
-WO-L03-0948      Site1  mixroom01      kg      78000   399     STARTING     0.5      
-WO-L03-0948      Site1  mixroom01      CS      9000    846     STARTING     9.4      
-WO-L03-0948      Site3  mixroom01      kg      42000   1461    STARTING     3.5      
-WO-L03-0964      Site1  mixroom01      -       -       374     NO_TARGET    -        
-WO-L03-0964-P12  Site2  mixroom01      -       -       13600   NO_TARGET    -        
-WO-L03-0964-P24  Site1  fillingline03  kg      2100    3606    COMPLETE     171.7    
-WO-L03-0964-P24  Site2  fillingline01  bottle  78000   43037   IN_PROGRESS  55.2     
-WO-L03-0964-P24  Site2  mixroom01      CS      9000    2305    STARTING     25.6     
-WO-L03-1100      Site1  fillingline02  bottle  13000   11036   IN_PROGRESS  84.9     
-WO-L03-1100-P16  Site1  mixroom01      kg      3375    352     STARTING     10.4     
-WO-L03-1100-P16  Site2  fillingline02  -       -       10718   NO_TARGET    -        
-WO-L03-1421      Site1  labelerline04  bottle  36000   3630    STARTING     10.1     
-WO-L04-0817-P20  Site1  labelerline01  CS      13000   2628    STARTING     20.2     
-WO-L04-0951      Site2  labelerline02  CS      36000   879     STARTING     2.4      
-WO-L04-0951-P20  Site1  fillingline01  -       13000   372     STARTING     2.9      
-WO-L04-0951-P20  Site3  labelerline01  bottle  13000   760     STARTING     5.8      
+WO Number        Site   Line           UOM     Target  Actual  Status         %Complete
+---------------------------------------------------------------------------------------
+WO-L01-0172      Site2  fillingline02  -       -       15140   NO_TARGET      -        
+WO-L01-0880      Site1  mixroom01      bottle  9000    11493   COMPLETE       127.7    
+WO-L02-0193      Site1  labelerline03  bottle  7000    10300   COMPLETE       147.1    
+WO-L02-0239      Site2  labelerline02  CS      36000   24670   IN_PROGRESS    68.5     
+WO-L02-0239      Site2  mixroom01      -       -       14658   NO_TARGET      -        
+WO-L02-0285      Site1  fillingline03  CS      2100    1898    IN_PROGRESS    90.4     
+WO-L03-0948      Site1  labelerline04  CS      3000    47389   COMPLETE       1579.6   
+WO-L03-0948      Site1  mixroom01      kg      78000   399     STARTING       0.5      
+WO-L03-0948      Site1  mixroom01      -       36000   34933   NEAR_COMPLETE  97.0     
+WO-L03-0948      Site3  mixroom01      kg      42000   1461    STARTING       3.5      
+WO-L03-0948-P12  Site1  labelerline01  CS      13000   4675    STARTING       36.0     
+WO-L03-0948-P12  Site1  mixroom01      -       -       8750    NO_TARGET      -        
+WO-L03-0964      Site3  labelerline01  bottle  13000   16774   COMPLETE       129.0    
+WO-L03-0964-P12  Site2  labelerline01  bottle  4875    1226    STARTING       25.1     
+WO-L03-0964-P24  Site1  fillingline02  bottle  13000   1445    STARTING       11.1     
+WO-L03-0964-P24  Site2  mixroom01      CS      9000    2305    STARTING       25.6     
+WO-L03-1100      Site2  fillingline01  bottle  78000   3962    STARTING       5.1      
+WO-L03-1100-P16  Site1  mixroom01      kg      3375    352     STARTING       10.4     
+WO-L03-1100-P16  Site3  mixroom01      bottle  36000   48000   COMPLETE       133.3    
+WO-L03-1421      Site1  mixroom01      CS      9000    66164   COMPLETE       735.2    
+WO-L03-1421-P16  Site1  labelerline03  CS      42000   578     STARTING       1.4      
+WO-L04-0817      Site1  fillingline01  -       13000   14658   COMPLETE       112.8    
+WO-L04-0817-P20  Site1  fillingline03  kg      2100    1285    IN_PROGRESS    61.2     
+WO-L04-0951      Site1  labelerline02  CS      2100    15140   COMPLETE       721.0    
+WO-L04-0951      Site1  labelerline04  bottle  36000   2949    STARTING       8.2      
+WO-L04-0951-P20  Site3  fillingline01  kg      3900    4691    COMPLETE       120.3    
 
 ## Summary by Status
 
 Status       Count
 ------------------
-COMPLETE     5    
+COMPLETE     9    
 IN_PROGRESS  4    
 NO_TARGET    3    
-STARTING     14   
+STARTING     10   
 
 ================================================================================
 WORK ORDER PROCESS STAGES (proveit2026-pss)
@@ -70,40 +70,40 @@ WORK ORDER PROCESS STAGES (proveit2026-pss)
 
 WO Number        Stage        Site   Line           UOM     Actual
 ------------------------------------------------------------------
-WO-L01-0172      1-MIXING     Site1  mixroom01      -       10762 
-WO-L01-0172      3-PACKAGING  Site2  labelerline01  bottle  858   
+WO-L01-0172      2-FILLING    Site2  fillingline02  -       15140 
 WO-L01-0880      1-MIXING     Site1  mixroom01      bottle  11493 
-WO-L01-0880      2-FILLING    Site3  fillingline01  kg      3508  
-WO-L02-0193      1-MIXING     Site3  mixroom01      bottle  9950  
 WO-L02-0193      3-PACKAGING  Site1  labelerline03  bottle  10300 
-WO-L02-0239      3-PACKAGING  Site1  labelerline03  CS      14714 
+WO-L02-0239      1-MIXING     Site2  mixroom01      -       14658 
+WO-L02-0239      3-PACKAGING  Site2  labelerline02  CS      24670 
 WO-L02-0285      2-FILLING    Site1  fillingline03  CS      1898  
-WO-L02-0503      3-PACKAGING  Site1  labelerline02  CS      13207 
 WO-L03-0948      1-MIXING     Site3  mixroom01      kg      1461  
 WO-L03-0948      1-MIXING     Site1  mixroom01      kg      399   
-WO-L03-0948      1-MIXING     Site1  mixroom01      CS      846   
+WO-L03-0948      1-MIXING     Site1  mixroom01      -       34933 
 WO-L03-0948      3-PACKAGING  Site1  labelerline04  CS      47389 
-WO-L03-0964      1-MIXING     Site1  mixroom01      -       374   
-WO-L03-0964-P12  1-MIXING     Site2  mixroom01      -       13600 
+WO-L03-0948-P12  1-MIXING     Site1  mixroom01      -       8750  
+WO-L03-0948-P12  3-PACKAGING  Site1  labelerline01  CS      4675  
+WO-L03-0964      3-PACKAGING  Site3  labelerline01  bottle  16774 
+WO-L03-0964-P12  3-PACKAGING  Site2  labelerline01  bottle  1226  
 WO-L03-0964-P24  1-MIXING     Site2  mixroom01      CS      2305  
-WO-L03-0964-P24  2-FILLING    Site2  fillingline01  bottle  43037 
-WO-L03-0964-P24  2-FILLING    Site1  fillingline03  kg      3606  
-WO-L03-1100      2-FILLING    Site1  fillingline02  bottle  11036 
+WO-L03-0964-P24  2-FILLING    Site1  fillingline02  bottle  1445  
+WO-L03-1100      2-FILLING    Site2  fillingline01  bottle  3962  
 WO-L03-1100-P16  1-MIXING     Site1  mixroom01      kg      352   
-WO-L03-1100-P16  2-FILLING    Site2  fillingline02  -       10718 
-WO-L03-1421      3-PACKAGING  Site1  labelerline04  bottle  3630  
-WO-L04-0817-P20  3-PACKAGING  Site1  labelerline01  CS      2628  
-WO-L04-0951      3-PACKAGING  Site2  labelerline02  CS      879   
-WO-L04-0951-P20  2-FILLING    Site1  fillingline01  -       372   
-WO-L04-0951-P20  3-PACKAGING  Site3  labelerline01  bottle  760   
+WO-L03-1100-P16  1-MIXING     Site3  mixroom01      bottle  48000 
+WO-L03-1421      1-MIXING     Site1  mixroom01      CS      66164 
+WO-L03-1421-P16  3-PACKAGING  Site1  labelerline03  CS      578   
+WO-L04-0817      2-FILLING    Site1  fillingline01  -       14658 
+WO-L04-0817-P20  2-FILLING    Site1  fillingline03  kg      1285  
+WO-L04-0951      3-PACKAGING  Site1  labelerline02  CS      15140 
+WO-L04-0951      3-PACKAGING  Site1  labelerline04  bottle  2949  
+WO-L04-0951-P20  2-FILLING    Site3  fillingline01  kg      4691  
 
 ## Summary by Stage
 
 Stage        WO Count  Total Qty
 --------------------------------
-1-MIXING     10        51542    
-2-FILLING    7         74175    
-3-PACKAGING  9         94365    
+1-MIXING     10        188515   
+2-FILLING    7         43079    
+3-PACKAGING  9         123701   
 
 ================================================================================
 WORK ORDER PRODUCT/LOT LINKAGE (proveit2026-l01)
@@ -113,32 +113,32 @@ WORK ORDER PRODUCT/LOT LINKAGE (proveit2026-l01)
 
 WO Number        Site   Line           Product  Lot
 ---------------------------------------------------
-WO-L01-0172      Site2  labelerline01  -        -  
-WO-L01-0172      Site1  mixroom01      -        -  
+WO-L01-0172      Site2  fillingline02  -        -  
 WO-L01-0880      Site1  mixroom01      -        -  
-WO-L01-0880      Site3  fillingline01  -        -  
 WO-L02-0193      Site1  labelerline03  -        -  
-WO-L02-0193      Site3  mixroom01      -        -  
-WO-L02-0239      Site1  labelerline03  -        -  
+WO-L02-0239      Site2  mixroom01      -        -  
+WO-L02-0239      Site2  labelerline02  -        -  
 WO-L02-0285      Site1  fillingline03  -        -  
-WO-L02-0503      Site1  labelerline02  -        -  
 WO-L03-0948      Site3  mixroom01      -        -  
 WO-L03-0948      Site1  mixroom01      -        -  
 WO-L03-0948      Site1  labelerline04  -        -  
 WO-L03-0948      Site1  mixroom01      -        -  
-WO-L03-0964      Site1  mixroom01      -        -  
-WO-L03-0964-P12  Site2  mixroom01      -        -  
-WO-L03-0964-P24  Site2  fillingline01  -        -  
+WO-L03-0948-P12  Site1  mixroom01      -        -  
+WO-L03-0948-P12  Site1  labelerline01  -        -  
+WO-L03-0964      Site3  labelerline01  -        -  
+WO-L03-0964-P12  Site2  labelerline01  -        -  
+WO-L03-0964-P24  Site1  fillingline02  -        -  
 WO-L03-0964-P24  Site2  mixroom01      -        -  
-WO-L03-0964-P24  Site1  fillingline03  -        -  
-WO-L03-1100      Site1  fillingline02  -        -  
+WO-L03-1100      Site2  fillingline01  -        -  
 WO-L03-1100-P16  Site1  mixroom01      -        -  
-WO-L03-1100-P16  Site2  fillingline02  -        -  
-WO-L03-1421      Site1  labelerline04  -        -  
-WO-L04-0817-P20  Site1  labelerline01  -        -  
-WO-L04-0951      Site2  labelerline02  -        -  
-WO-L04-0951-P20  Site1  fillingline01  -        -  
-WO-L04-0951-P20  Site3  labelerline01  -        -  
+WO-L03-1100-P16  Site3  mixroom01      -        -  
+WO-L03-1421      Site1  mixroom01      -        -  
+WO-L03-1421-P16  Site1  labelerline03  -        -  
+WO-L04-0817      Site1  fillingline01  -        -  
+WO-L04-0817-P20  Site1  fillingline03  -        -  
+WO-L04-0951      Site1  labelerline02  -        -  
+WO-L04-0951      Site1  labelerline04  -        -  
+WO-L04-0951-P20  Site3  fillingline01  -        -  
 
 ## Actual WO-Product Associations (from raw MQTT)
 
@@ -188,27 +188,27 @@ TARGET VS ACTUAL QUANTITIES (proveit2026-32p)
 WO Number        Site   Line           UOM     Target  Actual  Variance  %     
 -------------------------------------------------------------------------------
 WO-L03-0948      Site1  labelerline04  CS      3000    47389   44389     1579.6
-WO-L02-0503      Site1  labelerline02  CS      2100    13207   11107     628.9 
-WO-L03-0964-P24  Site1  fillingline03  kg      2100    3606    1506      171.7 
+WO-L03-1421      Site1  mixroom01      CS      9000    66164   57164     735.2 
+WO-L04-0951      Site1  labelerline02  CS      2100    15140   13040     721.0 
 WO-L02-0193      Site1  labelerline03  bottle  7000    10300   3300      147.1 
+WO-L03-1100-P16  Site3  mixroom01      bottle  36000   48000   12000     133.3 
+WO-L03-0964      Site3  labelerline01  bottle  13000   16774   3774      129.0 
 WO-L01-0880      Site1  mixroom01      bottle  9000    11493   2493      127.7 
+WO-L04-0951-P20  Site3  fillingline01  kg      3900    4691    791       120.3 
+WO-L04-0817      Site1  fillingline01  -       13000   14658   1658      112.8 
+WO-L03-0948      Site1  mixroom01      -       36000   34933   -1067     97.0  
 WO-L02-0285      Site1  fillingline03  CS      2100    1898    -202      90.4  
-WO-L01-0880      Site3  fillingline01  kg      3900    3508    -392      89.9  
-WO-L03-1100      Site1  fillingline02  bottle  13000   11036   -1964     84.9  
-WO-L03-0964-P24  Site2  fillingline01  bottle  78000   43037   -34963    55.2  
-WO-L02-0239      Site1  labelerline03  CS      42000   14714   -27286    35.0  
-WO-L01-0172      Site1  mixroom01      -       36000   10762   -25238    29.9  
-WO-L02-0193      Site3  mixroom01      bottle  36000   9950    -26050    27.6  
+WO-L02-0239      Site2  labelerline02  CS      36000   24670   -11330    68.5  
+WO-L04-0817-P20  Site1  fillingline03  kg      2100    1285    -815      61.2  
+WO-L03-0948-P12  Site1  labelerline01  CS      13000   4675    -8325     36.0  
 WO-L03-0964-P24  Site2  mixroom01      CS      9000    2305    -6695     25.6  
-WO-L04-0817-P20  Site1  labelerline01  CS      13000   2628    -10372    20.2  
-WO-L01-0172      Site2  labelerline01  bottle  4875    858     -4017     17.6  
+WO-L03-0964-P12  Site2  labelerline01  bottle  4875    1226    -3649     25.1  
+WO-L03-0964-P24  Site1  fillingline02  bottle  13000   1445    -11555    11.1  
 WO-L03-1100-P16  Site1  mixroom01      kg      3375    352     -3023     10.4  
-WO-L03-1421      Site1  labelerline04  bottle  36000   3630    -32370    10.1  
-WO-L03-0948      Site1  mixroom01      CS      9000    846     -8154     9.4   
-WO-L04-0951-P20  Site3  labelerline01  bottle  13000   760     -12240    5.8   
+WO-L04-0951      Site1  labelerline04  bottle  36000   2949    -33051    8.2   
+WO-L03-1100      Site2  fillingline01  bottle  78000   3962    -74038    5.1   
 WO-L03-0948      Site3  mixroom01      kg      42000   1461    -40539    3.5   
-WO-L04-0951-P20  Site1  fillingline01  -       13000   372     -12628    2.9   
-WO-L04-0951      Site2  labelerline02  CS      36000   879     -35121    2.4   
+WO-L03-1421-P16  Site1  labelerline03  CS      42000   578     -41422    1.4   
 WO-L03-0948      Site1  mixroom01      kg      78000   399     -77601    0.5   
 
 ================================================================================
@@ -220,12 +220,16 @@ QUANTITY OVERRUNS (proveit2026-ruj)
 WO Number        Site   Line           UOM     Target  Actual  Overrun  %Target
 -------------------------------------------------------------------------------
 WO-L03-0948      Site1  labelerline04  CS      3000    47389   44389    1579.6 
-WO-L02-0503      Site1  labelerline02  CS      2100    13207   11107    628.9  
-WO-L03-0964-P24  Site1  fillingline03  kg      2100    3606    1506     171.7  
+WO-L03-1421      Site1  mixroom01      CS      9000    66164   57164    735.2  
+WO-L04-0951      Site1  labelerline02  CS      2100    15140   13040    721.0  
 WO-L02-0193      Site1  labelerline03  bottle  7000    10300   3300     147.1  
+WO-L03-1100-P16  Site3  mixroom01      bottle  36000   48000   12000    133.3  
+WO-L03-0964      Site3  labelerline01  bottle  13000   16774   3774     129.0  
 WO-L01-0880      Site1  mixroom01      bottle  9000    11493   2493     127.7  
+WO-L04-0951-P20  Site3  fillingline01  kg      3900    4691    791      120.3  
+WO-L04-0817      Site1  fillingline01  -       13000   14658   1658     112.8  
 
-## FINDING: 5 work orders exceed their target quantity
+## FINDING: 9 work orders exceed their target quantity
 ## Targets appear to be MINIMUMS, not hard limits
 
 ================================================================================
@@ -254,45 +258,154 @@ QUANTITY FLOW ACROSS OPERATIONS (proveit2026-e1v)
 
 Base WO      Stage   Full WO          Site   Line           UOM     Qty  
 -------------------------------------------------------------------------
-WO-L01-0172  1-MIX   WO-L01-0172      Site1  mixroom01      -       10762
-WO-L01-0172  3-PACK  WO-L01-0172      Site2  labelerline01  bottle  858  
-WO-L01-0880  1-MIX   WO-L01-0880      Site1  mixroom01      bottle  11493
-WO-L01-0880  2-FILL  WO-L01-0880      Site3  fillingline01  kg      3508 
-WO-L02-0193  1-MIX   WO-L02-0193      Site3  mixroom01      bottle  9950 
-WO-L02-0193  3-PACK  WO-L02-0193      Site1  labelerline03  bottle  10300
+WO-L02-0239  1-MIX   WO-L02-0239      Site2  mixroom01      -       14658
+WO-L02-0239  3-PACK  WO-L02-0239      Site2  labelerline02  CS      24670
+WO-L03-0948  1-MIX   WO-L03-0948-P12  Site1  mixroom01      -       8750 
 WO-L03-0948  1-MIX   WO-L03-0948      Site1  mixroom01      kg      399  
-WO-L03-0948  1-MIX   WO-L03-0948      Site1  mixroom01      CS      846  
+WO-L03-0948  1-MIX   WO-L03-0948      Site1  mixroom01      -       34933
 WO-L03-0948  1-MIX   WO-L03-0948      Site3  mixroom01      kg      1461 
+WO-L03-0948  3-PACK  WO-L03-0948-P12  Site1  labelerline01  CS      4675 
 WO-L03-0948  3-PACK  WO-L03-0948      Site1  labelerline04  CS      47389
-WO-L03-0964  1-MIX   WO-L03-0964      Site1  mixroom01      -       374  
-WO-L03-0964  1-MIX   WO-L03-0964-P12  Site2  mixroom01      -       13600
 WO-L03-0964  1-MIX   WO-L03-0964-P24  Site2  mixroom01      CS      2305 
-WO-L03-0964  2-FILL  WO-L03-0964-P24  Site1  fillingline03  kg      3606 
-WO-L03-0964  2-FILL  WO-L03-0964-P24  Site2  fillingline01  bottle  43037
+WO-L03-0964  2-FILL  WO-L03-0964-P24  Site1  fillingline02  bottle  1445 
+WO-L03-0964  3-PACK  WO-L03-0964-P12  Site2  labelerline01  bottle  1226 
+WO-L03-0964  3-PACK  WO-L03-0964      Site3  labelerline01  bottle  16774
 WO-L03-1100  1-MIX   WO-L03-1100-P16  Site1  mixroom01      kg      352  
-WO-L03-1100  2-FILL  WO-L03-1100      Site1  fillingline02  bottle  11036
-WO-L03-1100  2-FILL  WO-L03-1100-P16  Site2  fillingline02  -       10718
-WO-L04-0951  2-FILL  WO-L04-0951-P20  Site1  fillingline01  -       372  
-WO-L04-0951  3-PACK  WO-L04-0951      Site2  labelerline02  CS      879  
-WO-L04-0951  3-PACK  WO-L04-0951-P20  Site3  labelerline01  bottle  760  
+WO-L03-1100  1-MIX   WO-L03-1100-P16  Site3  mixroom01      bottle  48000
+WO-L03-1100  2-FILL  WO-L03-1100      Site2  fillingline01  bottle  3962 
+WO-L03-1421  1-MIX   WO-L03-1421      Site1  mixroom01      CS      66164
+WO-L03-1421  3-PACK  WO-L03-1421-P16  Site1  labelerline03  CS      578  
+WO-L04-0951  2-FILL  WO-L04-0951-P20  Site3  fillingline01  kg      4691 
+WO-L04-0951  3-PACK  WO-L04-0951      Site1  labelerline02  CS      15140
+WO-L04-0951  3-PACK  WO-L04-0951      Site1  labelerline04  bottle  2949 
 
 ## Quantity Summary by Stage and UOM
 
 Stage   UOM     WO Count  Total Qty
 -----------------------------------
-1-MIX   CS      2         3151     
-1-MIX   bottle  2         21443    
+1-MIX   CS      2         68469    
+1-MIX   bottle  2         59493    
 1-MIX   kg      3         2212     
 2-FILL  CS      1         1898     
-2-FILL  bottle  2         54073    
-2-FILL  kg      2         7114     
-3-PACK  CS      5         78817    
-3-PACK  bottle  4         15548    
+2-FILL  bottle  2         5407     
+2-FILL  kg      2         5976     
+3-PACK  CS      5         92452    
+3-PACK  bottle  4         31249    
 
 ## FINDINGS:
 - Quantities DO NOT match across operations (UOMs differ)
 - UOM changes: kg (mix) -> bottle (fill) -> CS/cases (pack)
 - Conversion factors vary by product (bottle size, pack count)
+
+================================================================================
+METRICS COLLECTION PER PROCESS (proveit2026-2r1)
+================================================================================
+
+## Question: Are total metrics/quantities per process collected in work_orders table?
+
+## Answer: NO - work_orders stores LATEST SNAPSHOTS, not aggregated totals
+
+The data collection uses TWO separate storage mechanisms:
+1. work_orders table: Latest snapshot per site/line (cumulative running totals from MQTT)
+2. metrics_10s table: 10-second bucketed aggregates (count_infeed, count_outfeed, etc.)
+
+## Work Order Quantities (SNAPSHOTS)
+
+WO Number        Site   Line           UOM     Qty Actual  Last Updated       
+------------------------------------------------------------------------------
+WO-L04-0817      Site1  fillingline01  -       14658       2026-01-14 19:34:27
+WO-L03-1100      Site2  fillingline01  bottle  3962        2026-01-14 19:34:30
+WO-L04-0951-P20  Site3  fillingline01  kg      4691        2026-01-14 19:34:30
+WO-L03-0964-P24  Site1  fillingline02  bottle  1445        2026-01-14 19:34:31
+WO-L01-0172      Site2  fillingline02  -       15140       2026-01-14 19:34:31
+WO-L02-0285      Site1  fillingline03  CS      1898        2026-01-14 18:29:58
+WO-L04-0817-P20  Site1  fillingline03  kg      1285        2026-01-14 19:34:27
+WO-L03-0948-P12  Site1  labelerline01  CS      4675        2026-01-14 19:34:28
+WO-L03-0964-P12  Site2  labelerline01  bottle  1226        2026-01-14 19:34:30
+WO-L03-0964      Site3  labelerline01  bottle  16774       2026-01-14 19:34:30
+WO-L04-0951      Site1  labelerline02  CS      15140       2026-01-14 19:34:01
+WO-L02-0239      Site2  labelerline02  CS      24670       2026-01-14 19:34:30
+WO-L02-0193      Site1  labelerline03  bottle  10300       2026-01-14 18:29:58
+WO-L03-1421-P16  Site1  labelerline03  CS      578         2026-01-14 19:34:28
+WO-L03-0948      Site1  labelerline04  CS      47389       2026-01-14 18:29:58
+
+NOTE: quantity_actual is the LAST VALUE seen from MQTT for this WO at this site/line.
+It is NOT an aggregate of all equipment in that line.
+
+## Metrics Buckets (AGGREGATED COUNTS)
+
+Bucket               Site   Line                InFeed   OutFeed  Defect  Equip#  OEE  
+---------------------------------------------------------------------------------------
+2026-01-14T14:34:20  Site1  fillingline02       1081374  1081374  -       1       0.867
+2026-01-14T14:34:20  Site1  labelerline01       1117292  144916   -       3       0.703
+2026-01-14T14:34:20  Site1  palletizer02        106834   106834   -       3       0.708
+2026-01-14T14:34:20  Site1  labelerline04       108361   108361   -       3       0.627
+2026-01-14T14:34:20  Site1  palletizer01        134953   173273   -       3       0.796
+2026-01-14T14:34:20  Site1  labelerline02       1263628  1129216  -       3       0.734
+2026-01-14T14:34:20  Site2  palletizermanual02  37       -        -       1       0.027
+2026-01-14T14:34:20  Site2  palletizermanual01  33       33       -       1       0.023
+2026-01-14T14:34:20  Site2  palletizer01        102296   597      -       4       0.788
+2026-01-14T14:34:20  Site2  labelerline02       105473   868654   -       3       0.677
+
+NOTE: metrics_10s.count_infeed/outfeed/defect are SUMMED across equipment in each line.
+equipment_count shows how many pieces of equipment contributed to each bucket.
+
+## MQTT Topic Structure
+
+Data Type         Topic (last 65 chars)                                            
+-----------------------------------------------------------------------------------
+Equipment InFeed  Enterprise B/Metric/input/countinfeed                            
+Equipment InFeed  fillerproduction/fillingline01/caploader/metric/input/countinfeed
+Equipment InFeed  e1/fillerproduction/fillingline01/filler/metric/input/countinfeed
+Equipment InFeed  e B/Site1/fillerproduction/fillingline01/metric/input/countinfeed
+Equipment InFeed  e1/fillerproduction/fillingline01/washer/metric/input/countinfeed
+Equipment InFeed  fillerproduction/fillingline02/caploader/metric/input/countinfeed
+Equipment InFeed  e1/fillerproduction/fillingline02/filler/metric/input/countinfeed
+Equipment InFeed  e B/Site1/fillerproduction/fillingline02/metric/input/countinfeed
+Equipment InFeed  e1/fillerproduction/fillingline02/washer/metric/input/countinfeed
+Equipment InFeed  fillerproduction/fillingline03/caploader/metric/input/countinfeed
+Equipment InFeed  e1/fillerproduction/fillingline03/filler/metric/input/countinfeed
+Equipment InFeed  e B/Site1/fillerproduction/fillingline03/metric/input/countinfeed
+Equipment InFeed  e1/fillerproduction/fillingline03/washer/metric/input/countinfeed
+Equipment InFeed  Enterprise B/Site1/fillerproduction/metric/input/countinfeed     
+Equipment InFeed  Enterprise B/Site1/liquidprocessing/metric/input/countinfeed     
+Equipment InFeed  prise B/Site1/liquidprocessing/mixroom01/metric/input/countinfeed
+Equipment InFeed  B/Site1/liquidprocessing/mixroom01/vat01/metric/input/countinfeed
+Equipment InFeed  B/Site1/liquidprocessing/mixroom01/vat02/metric/input/countinfeed
+Equipment InFeed  B/Site1/liquidprocessing/mixroom01/vat03/metric/input/countinfeed
+Equipment InFeed  B/Site1/liquidprocessing/mixroom01/vat04/metric/input/countinfeed
+
+## Metrics Summary (from metrics_10s)
+
+Line                Buckets  Total InFeed  Total OutFeed  Total Defect  Avg OEE
+-------------------------------------------------------------------------------
+fillingline01       948      719294967     665831165      -             0.886  
+fillingline02       692      659547327     636057505      -             0.884  
+fillingline03       336      467996977     456830415      320           0.888  
+labelerline01       1089     647080219     650016510      11181         0.663  
+labelerline02       749      588003303     592605391      22770         0.704  
+labelerline03       324      234323006     239546020      19030         0.551  
+labelerline04       358      267117788     253782767      22421         0.625  
+palletizer01        743      86736938      81312514       -             0.74   
+palletizer02        374      40260329      39757261       -             0.753  
+palletizermanual01  267      51835         34233          -             0.149  
+palletizermanual02  181      9208          5525           -             0.029  
+palletizermanual03  89       801           504            -             0.005  
+palletizermanual04  88       968           649            -             0.005  
+
+## FINDINGS:
+1. work_orders.quantity_actual = SNAPSHOT (last MQTT value per WO/site/line)
+2. metrics_10s = AGGREGATED counts every 10 seconds (summed across equipment)
+3. WO quantities come from LINE-level topics (not equipment level)
+4. Equipment-level counts go to metrics_10s separately
+5. To get total production per process: SUM(metrics_10s.count_outfeed) by line
+
+## Data Flow:
+  MQTT: Enterprise B/Site1/packaging/labelerline04/workorder/quantityactual
+        -> work_orders.quantity_actual (latest snapshot)
+
+  MQTT: Enterprise B/Site1/packaging/labelerline04/labeler/metric/output/countoutfeed
+        -> metrics_10s.count_outfeed (bucketed sum)
 
 ================================================================================
 PRODUCT DATA ACCURACY (proveit2026-wg6)
@@ -302,15 +415,15 @@ PRODUCT DATA ACCURACY (proveit2026-wg6)
 
 ID   ItemID  Name              Class   BottleSize  PackCount
 ------------------------------------------------------------
-3    2       Cola Mix          Mix     0.0         0        
-159  10      Cola Mix          Mix     -           -        
+11   4       Cola Mix          Mix     0.0         0        
+19   7       Cola Mix          Bottle  0.0         0        
 2    14      Cola Soda 0.5L    Bottle  0.0         0        
-1    1       Orange 0.5L 16Pk  Pack    0.0         0        
-19   7       Orange 0.5L 24Pk  Mix     0.0         0        
-7    3       Orange Soda 0.5L  Mix     0.0         12       
-8    8       Orange Soda 0.5L  Mix     -           0        
-5    15      Orange Soda Mix   Mix     -           0        
-11   4       Orange Soda Mix   Pack    0.0         0        
+5    15      Cola Soda 0.5L    Pack    -           0        
+8    8       Orange 0.5L 12Pk  Bottle  -           0        
+3    2       Orange Soda 0.5L  Bottle  0.0         0        
+159  10      Orange Soda 0.5L  Mix     -           -        
+1    1       Orange Soda Mix   Pack    0.0         0        
+7    3       Orange Soda Mix   Bottle  0.0         12       
 
 ## Raw MQTT Bottle Size Data
 

@@ -205,3 +205,16 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# Database files
+proveit.db
+proveit.db-shm
+proveit.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Discovery output
+discovery_results.json
+
+# Claude session data
+.claude/

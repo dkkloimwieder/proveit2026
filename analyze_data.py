@@ -1,20 +1,24 @@
 """Comprehensive data analysis for Enterprise B manufacturing data.
 
 This script provides repeatable analysis queries for:
-- Work order status and processing
-- Process stage mapping
-- Product/lot linkage
-- Target vs actual quantities
-- Quantity overruns
-- Early WO closures
-- Cross-operation quantity flow
-- Product data accuracy (bottle size, pack count)
+- Work order status and processing (proveit2026-kax)
+- Process stage mapping (proveit2026-pss)
+- Product/lot linkage (proveit2026-l01)
+- Target vs actual quantities (proveit2026-32p)
+- Quantity overruns (proveit2026-ruj)
+- Early WO closures (proveit2026-4jz)
+- Cross-operation quantity flow (proveit2026-e1v)
+- Stage-to-stage target conversion (kg→bottle→case)
+- Metrics collection per process (proveit2026-2r1)
+- Product data accuracy (proveit2026-wg6)
 
 Usage:
-    python analyze_data.py                    # Full analysis
-    python analyze_data.py --section wo       # Work orders only
-    python analyze_data.py --section products # Products only
-    python analyze_data.py --section flow     # Process flow only
+    python analyze_data.py                      # Full analysis
+    python analyze_data.py --section wo         # Work orders only
+    python analyze_data.py --section flow       # Process flow only
+    python analyze_data.py --section targets    # Stage-to-stage targets
+    python analyze_data.py --section metrics    # Metrics collection
+    python analyze_data.py --section products   # Products only
     python analyze_data.py --output report.txt  # Save to file
 """
 
@@ -428,6 +432,277 @@ def analyze_quantity_flow(output):
 # PRODUCT DATA ANALYSIS
 # =============================================================================
 
+def analyze_stage_targets(output):
+    """Analyze target quantities across stages and conversion factors."""
+    print_header("STAGE-TO-STAGE TARGET ANALYSIS", output)
+
+    conn = get_connection()
+
+    output.write("""
+## KG to Bottle Conversion (MIX → FILL)
+
+Theoretical conversion based on bottle size:
+- Bottle size: 0.5L
+- Liquid density: ~1 kg/L (water equivalent)
+- Formula: 1 kg = 1L = 2 bottles (0.5L each)
+""")
+
+    # Show mix targets with theoretical bottle conversion
+    cursor = conn.execute("""
+        SELECT DISTINCT
+            (SELECT payload_text FROM messages_raw m2
+             WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) as wo,
+            CAST(payload_text AS INTEGER) as mix_kg,
+            CAST(payload_text AS INTEGER) * 2 as theoretical_bottles
+        FROM messages_raw m
+        WHERE topic LIKE '%mixroom%/workorder/quantitytarget'
+          AND CAST(payload_text AS INTEGER) > 0
+        ORDER BY wo
+    """)
+
+    output.write("\n## Mix Targets with Theoretical Bottle Output\n")
+    rows = [(r['wo'], r['mix_kg'], r['theoretical_bottles']) for r in cursor]
+    print_table(['Mix WO', 'Target (kg)', 'Theoretical Bottles (×2)'], rows, output)
+
+    # Show fill to pack conversion
+    output.write("""
+## Bottle to Case Conversion (FILL → PACK)
+
+Formula: Cases Target × Pack Size = Bottles Target
+""")
+
+    cursor = conn.execute("""
+        WITH fill_targets AS (
+            SELECT DISTINCT
+                CASE
+                    WHEN (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) LIKE '%-P%'
+                    THEN substr((SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1), 1,
+                          instr((SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1), '-P') - 1)
+                    ELSE (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1)
+                END as base_wo,
+                CAST(payload_text AS INTEGER) as fill_target
+            FROM messages_raw m
+            WHERE topic LIKE '%filling%/workorder/quantitytarget'
+              AND CAST(payload_text AS INTEGER) > 0
+        ),
+        pack_targets AS (
+            SELECT DISTINCT
+                CASE
+                    WHEN (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) LIKE '%-P%'
+                    THEN substr((SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1), 1,
+                          instr((SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1), '-P') - 1)
+                    ELSE (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1)
+                END as base_wo,
+                (SELECT payload_text FROM messages_raw m2
+                 WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) as full_wo,
+                CAST(payload_text AS INTEGER) as pack_target,
+                CASE
+                    WHEN (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) LIKE '%-P12' THEN 12
+                    WHEN (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) LIKE '%-P16' THEN 16
+                    WHEN (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) LIKE '%-P20' THEN 20
+                    WHEN (SELECT payload_text FROM messages_raw m2
+                          WHERE replace(m.topic, 'quantitytarget', 'workordernumber') = m2.topic LIMIT 1) LIKE '%-P24' THEN 24
+                    ELSE NULL
+                END as pack_size
+            FROM messages_raw m
+            WHERE topic LIKE '%labeler%/workorder/quantitytarget'
+              AND CAST(payload_text AS INTEGER) > 0
+        )
+        SELECT
+            f.base_wo,
+            f.fill_target as bottles,
+            p.full_wo as pack_wo,
+            p.pack_size,
+            p.pack_target as cases,
+            p.pack_target * p.pack_size as implied_bottles,
+            ROUND(100.0 * (p.pack_target * p.pack_size) / f.fill_target, 1) as match_pct
+        FROM fill_targets f
+        JOIN pack_targets p ON f.base_wo = p.base_wo
+        WHERE p.pack_size IS NOT NULL
+        ORDER BY f.base_wo
+    """)
+
+    output.write("\n## Fill → Pack Target Conversion\n")
+    rows = [(r['base_wo'], r['bottles'], r['pack_wo'], r['pack_size'],
+             r['cases'], r['implied_bottles'], r['match_pct']) for r in cursor]
+    print_table(['Base WO', 'Fill Bottles', 'Pack WO', 'Pack Size', 'Cases', 'Implied Bottles', 'Match%'],
+                rows, output)
+
+    output.write("""
+## WO Naming Convention
+
+Pattern: WO-Lxx-xxxx-Pxx
+
+CRITICAL: Line codes ARE stage-specific:
+- L01, L02 = MIX stage ONLY (liquidprocessing/mixroom)
+- L03, L04 = FILL and PACK stages (fillerproduction, packaging)
+- -Pxx suffix = Pack variant, ONLY at PACK stage
+
+Stage Linkage:
+- MIX → FILL: DISCONNECTED (different WO number series)
+- FILL → PACK: CONNECTED (same base WO + -Pxx suffix)
+
+Why disconnected? Mixing is a BATCH PROCESS producing bulk liquid in tanks.
+Multiple FILL orders draw from the same mix batch - no 1:1 WO tracking.
+""")
+
+    # Show WOs by stage
+    cursor = conn.execute("""
+        SELECT
+            CASE
+                WHEN topic LIKE '%mixroom%' OR topic LIKE '%vat%' THEN '1-MIX'
+                WHEN topic LIKE '%filling%' THEN '2-FILL'
+                WHEN topic LIKE '%labeler%' THEN '3-PACK'
+            END as stage,
+            payload_text as wo_number
+        FROM messages_raw
+        WHERE topic LIKE '%/workorder/workordernumber'
+        GROUP BY stage, wo_number
+        ORDER BY stage, wo_number
+    """)
+
+    output.write("\n## WOs by Stage (confirms naming pattern)\n")
+    rows = [(r['stage'], r['wo_number']) for r in cursor]
+    print_table(['Stage', 'WO Number'], rows, output)
+
+    conn.close()
+
+
+def analyze_metrics_collection(output):
+    """Issue proveit2026-2r1: Analyze what metrics/quantities are collected per process."""
+    print_header("METRICS COLLECTION PER PROCESS (proveit2026-2r1)", output)
+
+    conn = get_connection()
+
+    output.write("""
+## Question: Are total metrics/quantities per process collected in work_orders table?
+
+## Answer: NO - work_orders stores LATEST SNAPSHOTS, not aggregated totals
+
+The data collection uses TWO separate storage mechanisms:
+1. work_orders table: Latest snapshot per site/line (cumulative running totals from MQTT)
+2. metrics_10s table: 10-second bucketed aggregates (count_infeed, count_outfeed, etc.)
+""")
+
+    # Show work_orders structure
+    output.write("\n## Work Order Quantities (SNAPSHOTS)\n")
+    cursor = conn.execute("""
+        SELECT
+            work_order_number,
+            site,
+            line,
+            uom,
+            CAST(quantity_actual AS INTEGER) as qty_actual,
+            datetime(updated_at) as last_updated
+        FROM work_orders
+        ORDER BY line, site
+        LIMIT 15
+    """)
+    rows = [(r['work_order_number'], r['site'], r['line'], r['uom'],
+             r['qty_actual'], r['last_updated']) for r in cursor]
+    print_table(['WO Number', 'Site', 'Line', 'UOM', 'Qty Actual', 'Last Updated'], rows, output)
+
+    output.write("""
+NOTE: quantity_actual is the LAST VALUE seen from MQTT for this WO at this site/line.
+It is NOT an aggregate of all equipment in that line.
+""")
+
+    # Show metrics_10s structure
+    output.write("\n## Metrics Buckets (AGGREGATED COUNTS)\n")
+    cursor = conn.execute("""
+        SELECT
+            bucket,
+            site,
+            line,
+            count_infeed,
+            count_outfeed,
+            count_defect,
+            equipment_count,
+            oee
+        FROM metrics_10s
+        WHERE count_infeed IS NOT NULL
+        ORDER BY bucket DESC
+        LIMIT 10
+    """)
+    rows = [(r['bucket'], r['site'], r['line'], r['count_infeed'],
+             r['count_outfeed'], r['count_defect'], r['equipment_count'],
+             round(r['oee'], 3) if r['oee'] else None) for r in cursor]
+    print_table(['Bucket', 'Site', 'Line', 'InFeed', 'OutFeed', 'Defect', 'Equip#', 'OEE'], rows, output)
+
+    output.write("""
+NOTE: metrics_10s.count_infeed/outfeed/defect are SUMMED across equipment in each line.
+equipment_count shows how many pieces of equipment contributed to each bucket.
+""")
+
+    # Show MQTT topic structure
+    output.write("\n## MQTT Topic Structure\n")
+    cursor = conn.execute("""
+        SELECT DISTINCT
+            CASE
+                WHEN topic LIKE '%/workorder/quantityactual' THEN 'WO Quantity'
+                WHEN topic LIKE '%/metric/input/countinfeed' THEN 'Equipment InFeed'
+                WHEN topic LIKE '%/metric/output/countoutfeed' THEN 'Equipment OutFeed'
+            END as data_type,
+            topic
+        FROM messages_raw
+        WHERE topic LIKE '%/workorder/quantityactual'
+           OR topic LIKE '%/metric/input/countinfeed'
+           OR topic LIKE '%/metric/output/countoutfeed'
+        ORDER BY data_type, topic
+        LIMIT 20
+    """)
+    rows = [(r['data_type'], r['topic'][-65:]) for r in cursor]
+    print_table(['Data Type', 'Topic (last 65 chars)'], rows, output)
+
+    # Total metrics summary
+    output.write("\n## Metrics Summary (from metrics_10s)\n")
+    cursor = conn.execute("""
+        SELECT
+            line,
+            COUNT(*) as buckets,
+            SUM(count_infeed) as total_infeed,
+            SUM(count_outfeed) as total_outfeed,
+            SUM(count_defect) as total_defect,
+            ROUND(AVG(oee), 3) as avg_oee
+        FROM metrics_10s
+        WHERE count_infeed IS NOT NULL
+        GROUP BY line
+        ORDER BY line
+    """)
+    rows = [(r['line'], r['buckets'], r['total_infeed'], r['total_outfeed'],
+             r['total_defect'], r['avg_oee']) for r in cursor]
+    print_table(['Line', 'Buckets', 'Total InFeed', 'Total OutFeed', 'Total Defect', 'Avg OEE'], rows, output)
+
+    output.write("""
+## FINDINGS:
+1. work_orders.quantity_actual = SNAPSHOT (last MQTT value per WO/site/line)
+2. metrics_10s = AGGREGATED counts every 10 seconds (summed across equipment)
+3. WO quantities come from LINE-level topics (not equipment level)
+4. Equipment-level counts go to metrics_10s separately
+5. To get total production per process: SUM(metrics_10s.count_outfeed) by line
+
+## Data Flow:
+  MQTT: Enterprise B/Site1/packaging/labelerline04/workorder/quantityactual
+        -> work_orders.quantity_actual (latest snapshot)
+
+  MQTT: Enterprise B/Site1/packaging/labelerline04/labeler/metric/output/countoutfeed
+        -> metrics_10s.count_outfeed (bucketed sum)
+""")
+
+    conn.close()
+
+
 def analyze_product_data(output):
     """Issue proveit2026-wg6: Verify bottle size and case count accuracy."""
     print_header("PRODUCT DATA ACCURACY (proveit2026-wg6)", output)
@@ -559,7 +834,7 @@ def show_summary(output):
 
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive data analysis")
-    parser.add_argument("--section", choices=['wo', 'flow', 'products', 'all'],
+    parser.add_argument("--section", choices=['wo', 'flow', 'products', 'metrics', 'targets', 'all'],
                         default='all', help="Section to analyze")
     parser.add_argument("--output", type=str, help="Output file (default: stdout)")
     args = parser.parse_args()
@@ -588,6 +863,12 @@ def main():
 
         if args.section in ['flow', 'all']:
             analyze_quantity_flow(output)
+
+        if args.section in ['targets', 'all']:
+            analyze_stage_targets(output)
+
+        if args.section in ['metrics', 'all']:
+            analyze_metrics_collection(output)
 
         if args.section in ['products', 'all']:
             analyze_product_data(output)

@@ -144,6 +144,7 @@ python analyze_data.py --section products   # Product data only
 - proveit2026-4jz: Early WO closures
 - proveit2026-e1v: Cross-operation quantity flow
 - proveit2026-wg6: Product data accuracy
+- proveit2026-2r1: Metrics collection per process
 
 ### `analyze_workorders.py`
 
@@ -202,6 +203,20 @@ python validate_capture.py
 - WOs can be replaced before reaching target
 - Example: WO-L04-0142-P16 closed at 59.9% (2919/4875)
 
+### 3a. Completed Work Orders (observed)
+6 WO transitions detected during ~1.3 hours of data collection:
+
+| Time | WO Number | Location | Final Qty | Target | Status |
+|------|-----------|----------|-----------|--------|--------|
+| 18:33:01 | WO-L04-0142 | fillingline03 | 77,946 | 78,000 | 99.9% (EARLY) |
+| 18:33:01 | WO-L04-0142-P12 | labelerline03 | 6,165 | - | NO_TARGET |
+| 18:33:11 | WO-L03-0964-P12 | labelerline04 | 4 | 4,333 | 0.1% (EARLY) |
+| 18:48:41 | WO-L02-1486 | mixroom01/vat03 | 12,415 | 13,000 | 95.5% (EARLY) |
+| 18:53:21 | WO-L02-0239 | mixroom01/vat02 | 0 | 13,000 | 0.0% (EARLY) |
+| 19:02:21 | WO-L02-1259 | mixroom01/vat01 | 11,493 | 7,000 | **164.2% (MET)** |
+
+Only 1 of 6 met target - others closed early or had no target.
+
 ### 4. Cross-Operation Quantity Flow (proveit2026-e1v)
 - Quantities **DO NOT** match across operations
 - UOM changes: kg → bottle → CS (cases)
@@ -234,6 +249,54 @@ python validate_capture.py
 
 ### 10. State Machine
 States captured: Running, Idle, CIP, Cleaning, Fill, Mix, Transfer, Planned Downtime, Unplanned Downtime, Pasteurize
+
+### 11. Stage-to-Stage Target Conversion
+
+**KG to Bottle (MIX → FILL):**
+- Bottle size: 0.5L
+- Theoretical conversion: 1 kg ≈ 2 bottles (assuming ~1 kg/L density)
+- Mix targets: 7,000 - 13,000 kg → 14,000 - 26,000 theoretical bottles
+- **No direct WO linkage** between MIX and FILL stages in data
+
+**Bottle to Case (FILL → PACK):**
+- Formula: `Cases Target × Pack Size = Bottles Target`
+- This relationship is **100% accurate** for linked WOs
+- Example: WO-L03-0948 → 36,000 bottles = 3,000 cases × 12 bottles/case
+
+**WO Naming Convention:**
+- Pattern: `WO-Lxx-xxxx-Pxx`
+- **CRITICAL FINDING**: Line codes ARE stage-specific:
+  - `L01`, `L02` = MIX stage ONLY (liquidprocessing/mixroom)
+  - `L03`, `L04` = FILL and PACK stages (fillerproduction, packaging)
+- `-Pxx` suffix indicates pack variant, ONLY at PACK stage
+
+**Stage Linkage:**
+- **MIX → FILL**: DISCONNECTED - Different WO number series (L01/L02 vs L03/L04)
+- **FILL → PACK**: CONNECTED - Same base WO, adds -Pxx suffix
+- Example: WO-L03-0948 (FILL) → WO-L03-0948-P12 (PACK)
+
+**Why disconnected?** Mixing is a BATCH PROCESS that produces bulk liquid stored in tanks.
+Multiple FILL orders can draw from the same mix batch. No 1:1 WO tracking.
+
+Run analysis: `python analyze_data.py --section targets`
+
+### 12. Metrics Collection Per Process (proveit2026-2r1)
+- **work_orders.quantity_actual** = SNAPSHOT (last MQTT value per WO/site/line)
+- **metrics_10s** = AGGREGATED counts every 10 seconds (summed across equipment)
+- WO quantities come from LINE-level MQTT topics
+- Equipment-level counts go to metrics_10s table separately
+- To get total production per line: `SUM(metrics_10s.count_outfeed)` grouped by line
+
+**Data Flow:**
+```
+MQTT Line-level WO topic:
+  Enterprise B/Site1/packaging/labelerline04/workorder/quantityactual
+  -> work_orders.quantity_actual (latest snapshot)
+
+MQTT Equipment-level metric topic:
+  Enterprise B/Site1/packaging/labelerline04/labeler/metric/output/countoutfeed
+  -> metrics_10s.count_outfeed (10s bucketed sum)
+```
 
 ---
 
