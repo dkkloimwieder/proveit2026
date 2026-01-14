@@ -42,6 +42,8 @@ def parse_topic(topic: str) -> TopicInfo | None:
     """Parse Enterprise B topic into components.
 
     Handles variable depth topics:
+    - Enterprise-level: Node/category/data_type (4 parts)
+    - Site-level: Site/node/category/data_type (5 parts)
     - Area-level: Site/area/category/data_type (6 parts)
     - Line-level: Site/area/line/category/data_type (7 parts)
     - Equipment-level: Site/area/line/equipment/category/data_type (8 parts)
@@ -56,8 +58,27 @@ def parse_topic(topic: str) -> TopicInfo | None:
     parts = topic.split("/")
     info = TopicInfo(topic=topic)
 
+    # Handle enterprise-level topics (Enterprise B/Node/...)
+    if len(parts) >= 2 and parts[1] in ("Node",):
+        info.site = None
+        info.area = None
+        if len(parts) >= 3:
+            info.category = parts[2]
+        if len(parts) >= 4:
+            info.data_type = "/".join(parts[3:])
+        return info
+
     if len(parts) >= 2:
         info.site = parts[1] if parts[1].startswith("Site") else None
+
+    # Handle site-level topics (Enterprise B/Site/node/...)
+    if len(parts) >= 3 and parts[2] in CATEGORY_NAMES:
+        info.area = None
+        info.category = parts[2]
+        if len(parts) >= 4:
+            info.data_type = "/".join(parts[3:])
+        return info
+
     if len(parts) >= 3:
         info.area = parts[2]
 
@@ -146,8 +167,9 @@ class DataCollector:
 
         # Pending reference data updates
         self.pending_products: dict[int, dict] = {}
-        self.pending_lots: dict[int, dict] = {}
+        self.pending_lots: dict[str, dict] = {}  # keyed by path
         self.pending_work_orders: dict[int, dict] = {}
+        self.pending_assets: dict[int, dict] = {}
 
         # Raw message buffer
         self.raw_buffer: list[tuple] = []
@@ -223,13 +245,17 @@ class DataCollector:
 
         # Lot data (direct or nested under workorder/)
         elif dt and (dt.startswith("lotnumber/") or dt.startswith("workorder/lotnumber/")):
-            # Extract field from nested path
-            if "lotnumber/lotnumber" in dt:
-                self._handle_lot(info, "lotnumber", value)
-            elif "lotnumberid" in dt:
+            # Extract field - check lotnumberid BEFORE lotnumber (substring issue)
+            if dt.endswith("lotnumberid"):
                 self._handle_lot(info, "lotnumberid", value)
+            elif dt.endswith("lotnumber"):
+                self._handle_lot(info, "lotnumber", value)
             elif dt.startswith("lotnumber/") and not dt.startswith("lotnumber/item/"):
                 self._handle_lot(info, dt[10:], value)
+
+        # Lot fields at lotnumber category level (direct fields like lotnumberid, lotnumber)
+        elif cat == "lotnumber" and dt in ("lotnumberid", "lotnumber"):
+            self._handle_lot(info, dt, value)
 
         # Work order data (direct fields under workorder/ prefix)
         elif dt and dt.startswith("workorder/") and not dt.startswith("workorder/lotnumber/"):
@@ -251,6 +277,11 @@ class DataCollector:
             # node/assetidentifier/field -> dt is "assetidentifier/field"
             if dt.startswith("assetidentifier/"):
                 self._handle_asset(info, dt[16:], value)
+        elif cat == "assetidentifier" and dt in (
+            "assetid", "assetname", "assetpath", "displayname",
+            "parentassetid", "sortorder", "assettypename"
+        ):
+            self._handle_asset(info, dt, value)
 
         # Metrics (under metric category)
         elif cat == "metric" or dt in (
@@ -291,18 +322,23 @@ class DataCollector:
         self._flush_pending_products()
 
     def _handle_lot(self, info: TopicInfo, field: str, value: Any):
-        """Handle lot data."""
-        if field == "lotnumberid" and value:
-            lot_id = int(value)
-            if lot_id not in self.pending_lots:
-                self.pending_lots[lot_id] = {"lot_number_id": lot_id}
-        elif field == "lotnumber" and self.pending_lots:
-            for lot in self.pending_lots.values():
-                if "lot_number" not in lot:
-                    lot["lot_number"] = str(value)
-                    break
+        """Handle lot data - accumulate by path then flush when complete."""
+        path_key = f"{info.site}/{info.area}/{info.line}/{info.equipment}"
 
-        self._flush_pending_lots()
+        if path_key not in self.pending_lots:
+            self.pending_lots[path_key] = {}
+
+        lot = self.pending_lots[path_key]
+
+        if field == "lotnumberid" and value:
+            lot["lot_number_id"] = int(value)
+        elif field == "lotnumber" and value:
+            lot["lot_number"] = str(value)
+
+        # Flush if we have both id and number
+        if "lot_number_id" in lot and "lot_number" in lot:
+            self._flush_pending_lots()
+            self.pending_lots.pop(path_key, None)
 
     def _handle_work_order(self, info: TopicInfo, field: str, value: Any):
         """Handle work order data."""
@@ -362,6 +398,32 @@ class DataCollector:
         """Handle asset identifier data."""
         if field == "assettypename" and value:
             self._get_or_create_asset_type(str(value))
+
+        if field == "assetid" and value:
+            asset_id = int(value)
+            if asset_id not in self.pending_assets:
+                self.pending_assets[asset_id] = {
+                    "asset_id": asset_id,
+                    "site": info.site,
+                    "area": info.area,
+                    "line": info.line,
+                    "equipment": info.equipment
+                }
+        elif field in ("assetname", "assetpath", "displayname", "parentassetid", "sortorder", "assettypename"):
+            for asset in self.pending_assets.values():
+                col = {
+                    "assetname": "asset_name",
+                    "assetpath": "asset_path",
+                    "displayname": "display_name",
+                    "parentassetid": "parent_asset_id",
+                    "sortorder": "sort_order",
+                    "assettypename": "asset_type_name"
+                }.get(field)
+                if col and col not in asset:
+                    asset[col] = value
+                    break
+
+        self._flush_pending_assets()
 
     def _handle_metric(self, info: TopicInfo, data_type: str, value: Any):
         """Handle metric data - accumulate into bucket."""
@@ -542,20 +604,21 @@ class DataCollector:
     def _flush_pending_lots(self):
         """Flush pending lots to database."""
         cursor = self.conn.cursor()
-        for lot_num_id, data in list(self.pending_lots.items()):
-            if "lot_number" in data:
+        for path_key, data in list(self.pending_lots.items()):
+            if "lot_number_id" in data and "lot_number" in data:
+                lot_num_id = data["lot_number_id"]
                 cursor.execute("""
                     INSERT INTO lots (lot_number_id, lot_number)
                     VALUES (?, ?)
                     ON CONFLICT(lot_number_id) DO UPDATE SET
                         lot_number = COALESCE(excluded.lot_number, lot_number),
                         updated_at = CURRENT_TIMESTAMP
-                """, (data.get("lot_number_id"), data.get("lot_number")))
+                """, (lot_num_id, data.get("lot_number")))
                 cursor.execute("SELECT id FROM lots WHERE lot_number_id = ?", (lot_num_id,))
                 row = cursor.fetchone()
                 if row:
                     self.lot_cache[lot_num_id] = row[0]
-                del self.pending_lots[lot_num_id]
+                del self.pending_lots[path_key]
         self.conn.commit()
 
     def _flush_pending_work_orders(self):
@@ -587,6 +650,40 @@ class DataCollector:
                 if row:
                     self.work_order_cache[wo_id] = row[0]
                 del self.pending_work_orders[wo_id]
+        self.conn.commit()
+
+    def _flush_pending_assets(self):
+        """Flush pending assets to database."""
+        cursor = self.conn.cursor()
+        for asset_id, data in list(self.pending_assets.items()):
+            if "asset_name" in data or "asset_path" in data:
+                # Get or create asset_type if present
+                asset_type_id = None
+                if "asset_type_name" in data:
+                    asset_type_id = self._get_or_create_asset_type(data["asset_type_name"])
+
+                cursor.execute("""
+                    INSERT INTO assets (asset_id, asset_name, asset_path, display_name, asset_type_id, parent_asset_id, sort_order, site, area, line, equipment)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(asset_id) DO UPDATE SET
+                        asset_name = COALESCE(excluded.asset_name, asset_name),
+                        asset_path = COALESCE(excluded.asset_path, asset_path),
+                        display_name = COALESCE(excluded.display_name, display_name),
+                        updated_at = CURRENT_TIMESTAMP
+                """, (
+                    data.get("asset_id"),
+                    data.get("asset_name"),
+                    data.get("asset_path"),
+                    data.get("display_name"),
+                    asset_type_id,
+                    data.get("parent_asset_id"),
+                    data.get("sort_order"),
+                    data.get("site"),
+                    data.get("area"),
+                    data.get("line"),
+                    data.get("equipment")
+                ))
+                del self.pending_assets[asset_id]
         self.conn.commit()
 
     def _insert_event(self, info: TopicInfo, event_type: str, **kwargs):
@@ -680,6 +777,7 @@ class DataCollector:
             self._flush_pending_products()
             self._flush_pending_lots()
             self._flush_pending_work_orders()
+            self._flush_pending_assets()
             if self.capture_raw:
                 self._flush_raw_buffer()
         self.conn.close()
