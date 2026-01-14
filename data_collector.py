@@ -464,14 +464,29 @@ class DataCollector:
         """Log WO completion with final quantities and metrics."""
         location_key = f"{info.site}/{info.line}/{info.equipment or 'line'}"
 
+        # Query DB for most accurate final values (cache may be incomplete after restart)
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT work_order_number, quantity_actual, quantity_target, quantity_defect, uom
+            FROM work_orders WHERE work_order_id = ?
+        """, (prev_wo_id,))
+        row = cursor.fetchone()
+        if row:
+            wo_number, actual, target, defect, uom = row
+        else:
+            # Fall back to cache
+            wo_number = prev_data.get("work_order_number")
+            actual = prev_data.get("quantity_actual")
+            target = prev_data.get("quantity_target")
+            defect = prev_data.get("quantity_defect")
+            uom = prev_data.get("uom")
+
         # Get duration
         first_seen = self.wo_first_seen.get(location_key)
         duration = (datetime.now() - first_seen).total_seconds() if first_seen else None
 
         # Calculate completion percentage
         pct = None
-        target = prev_data.get("quantity_target")
-        actual = prev_data.get("quantity_actual")
         if target and target > 0 and actual:
             pct = (actual / target) * 100
 
@@ -487,7 +502,6 @@ class DataCollector:
         final_infeed = metrics.count_infeed if metrics else None
         final_outfeed = metrics.count_outfeed if metrics else None
 
-        cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO work_order_completions (
                 site, area, line, equipment,
@@ -500,9 +514,8 @@ class DataCollector:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             info.site, info.area, info.line, info.equipment,
-            prev_wo_id, prev_data.get("work_order_number"),
-            prev_data.get("quantity_actual"), prev_data.get("quantity_target"),
-            prev_data.get("quantity_defect"), prev_data.get("uom"), pct,
+            prev_wo_id, wo_number,
+            actual, target, defect, uom, pct,
             final_oee, final_avail, final_perf, final_qual,
             final_infeed, final_outfeed,
             next_wo_id, next_wo_number,
@@ -510,8 +523,8 @@ class DataCollector:
         ))
         self.conn.commit()
 
-        print(f"\n[WO COMPLETED] {prev_data.get('work_order_number')} @ {info.site}/{info.line} "
-              f"qty={prev_data.get('quantity_actual')} -> {next_wo_number}")
+        print(f"\n[WO COMPLETED] {wo_number} @ {info.site}/{info.line} "
+              f"qty={actual} -> next_wo_id={next_wo_id}")
 
     def _handle_asset(self, info: TopicInfo, field: str, value: Any):
         """Handle asset identifier data."""
