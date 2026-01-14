@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+ALWASY USE SHORT, ONE LINE COMMITS WITH NO REFERENCE TO AUTHORS!
+ALWAYS USE BEADS TO MANAGE ISSUES/PLANNING/TODOS - BE GRANULAR!
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
