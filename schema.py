@@ -191,6 +191,39 @@ CREATE INDEX IF NOT EXISTS idx_metrics_line ON metrics_10s(site, line);
 CREATE INDEX IF NOT EXISTS idx_metrics_wo ON metrics_10s(work_order_id);
 
 -- ============================================================
+-- WORK ORDER COMPLETIONS (snapshot at transition)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS work_order_completions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    site TEXT NOT NULL,
+    area TEXT,
+    line TEXT NOT NULL,
+    equipment TEXT,
+    work_order_id INTEGER,
+    work_order_number TEXT,
+    final_quantity INTEGER,
+    quantity_target INTEGER,
+    quantity_defect INTEGER,
+    uom TEXT,
+    pct_complete REAL,
+    final_oee REAL,
+    final_availability REAL,
+    final_performance REAL,
+    final_quality REAL,
+    final_count_infeed INTEGER,
+    final_count_outfeed INTEGER,
+    next_work_order_id INTEGER,
+    next_work_order_number TEXT,
+    duration_seconds REAL,
+    UNIQUE(work_order_id, site, line, completed_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wo_completions_time ON work_order_completions(completed_at);
+CREATE INDEX IF NOT EXISTS idx_wo_completions_wo ON work_order_completions(work_order_number);
+
+-- ============================================================
 -- RAW MESSAGE CAPTURE (for debugging/replay)
 -- ============================================================
 

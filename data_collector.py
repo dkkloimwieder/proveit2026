@@ -157,7 +157,9 @@ class DataCollector:
         # Current state tracking for change detection
         self.current_state: dict[str, int] = {}      # equipment_key -> state_id
         self.current_lot: dict[str, int] = {}        # equipment_key -> lot_id
-        self.current_wo: dict[str, int] = {}         # equipment_key -> work_order_id
+        self.current_wo: dict[str, int] = {}         # location_key -> work_order_id
+        self.wo_first_seen: dict[str, datetime] = {} # location_key -> first_seen timestamp
+        self.wo_data_cache: dict[str, dict] = {}     # location_key -> last known WO data
 
         # Metric buckets: (bucket_ts, site, line) -> LineMetrics
         self.metric_buckets: dict[tuple, LineMetrics] = {}
@@ -340,20 +342,63 @@ class DataCollector:
             self.pending_lots.pop(path_key, None)
 
     def _handle_work_order(self, info: TopicInfo, field: str, value: Any):
-        """Handle work order data."""
+        """Handle work order data and detect WO changes."""
+        # Track per equipment (different vats have different WOs)
+        location_key = f"{info.site}/{info.line}/{info.equipment or 'line'}"
+
+        # Initialize or get cached data for this location
+        if location_key not in self.wo_data_cache:
+            self.wo_data_cache[location_key] = {
+                "site": info.site,
+                "line": info.line,
+                "equipment": info.equipment
+            }
+        wo_data = self.wo_data_cache[location_key]
+
         if field == "workorderid" and value:
             wo_id = int(value)
+
+            # Check for WO change at this location BEFORE updating cache
+            prev_wo_id = self.current_wo.get(location_key)
+            if prev_wo_id and prev_wo_id != wo_id:
+                # WO changed - log completion with PREVIOUS data
+                prev_data = wo_data.copy()  # Copy before we modify it
+                self._log_wo_completion(info, prev_wo_id, prev_data, wo_id, "")
+                # Reset cache for new WO
+                self.wo_data_cache[location_key] = {
+                    "site": info.site,
+                    "line": info.line,
+                    "equipment": info.equipment,
+                    "work_order_id": wo_id
+                }
+                wo_data = self.wo_data_cache[location_key]
+                self.current_wo[location_key] = wo_id
+                self.wo_first_seen[location_key] = datetime.now()
+            elif not prev_wo_id:
+                # First WO at this location
+                wo_data["work_order_id"] = wo_id
+                self.current_wo[location_key] = wo_id
+                self.wo_first_seen[location_key] = datetime.now()
+            else:
+                # Same WO, just update
+                wo_data["work_order_id"] = wo_id
+
+            # Also add to pending for DB upsert
             if wo_id not in self.pending_work_orders:
                 self.pending_work_orders[wo_id] = {
                     "work_order_id": wo_id,
                     "site": info.site,
                     "line": info.line
                 }
-        elif field == "workordernumber" and self.pending_work_orders:
+
+        elif field == "workordernumber" and value:
+            wo_data["work_order_number"] = str(value)
+            # Update pending if exists
             for wo in self.pending_work_orders.values():
                 if "work_order_number" not in wo:
                     wo["work_order_number"] = str(value)
                     break
+
         elif field in ("quantitytarget", "quantityactual", "quantitydefect", "uom", "assetid"):
             col = {
                 "quantitytarget": "quantity_target",
@@ -363,6 +408,8 @@ class DataCollector:
                 "assetid": "asset_id"
             }.get(field)
             if col:
+                wo_data[col] = value
+                # Update pending if exists
                 for wo in self.pending_work_orders.values():
                     if col not in wo:
                         wo[col] = value
@@ -392,6 +439,79 @@ class DataCollector:
             pass  # Handle with name
         elif field == "duration":
             pass  # Could track duration separately
+
+    def _handle_work_order_change(self, info: TopicInfo, wo_id: int, wo_number: str, wo_data: dict):
+        """Detect WO changes and log completion."""
+        location_key = f"{info.site}/{info.line}/{info.equipment or 'line'}"
+
+        prev_wo_id = self.current_wo.get(location_key)
+
+        if prev_wo_id and prev_wo_id != wo_id:
+            # WO CHANGED - log completion of previous WO
+            prev_data = self.wo_data_cache.get(location_key, {})
+            self._log_wo_completion(info, prev_wo_id, prev_data, wo_id, wo_number)
+
+        # Update tracking
+        if prev_wo_id != wo_id:
+            # New WO at this location
+            self.wo_first_seen[location_key] = datetime.now()
+
+        self.current_wo[location_key] = wo_id
+        self.wo_data_cache[location_key] = wo_data.copy()
+
+    def _log_wo_completion(self, info: TopicInfo, prev_wo_id: int, prev_data: dict,
+                          next_wo_id: int, next_wo_number: str):
+        """Log WO completion with final quantities and metrics."""
+        location_key = f"{info.site}/{info.line}/{info.equipment or 'line'}"
+
+        # Get duration
+        first_seen = self.wo_first_seen.get(location_key)
+        duration = (datetime.now() - first_seen).total_seconds() if first_seen else None
+
+        # Calculate completion percentage
+        pct = None
+        target = prev_data.get("quantity_target")
+        actual = prev_data.get("quantity_actual")
+        if target and target > 0 and actual:
+            pct = (actual / target) * 100
+
+        # Get current metrics for this line
+        bucket_key = (self.current_bucket, info.site, info.line)
+        metrics = self.metric_buckets.get(bucket_key)
+
+        # Get latest OEE values
+        final_oee = metrics.oee[-1] if metrics and metrics.oee else None
+        final_avail = metrics.availability[-1] if metrics and metrics.availability else None
+        final_perf = metrics.performance[-1] if metrics and metrics.performance else None
+        final_qual = metrics.quality[-1] if metrics and metrics.quality else None
+        final_infeed = metrics.count_infeed if metrics else None
+        final_outfeed = metrics.count_outfeed if metrics else None
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO work_order_completions (
+                site, area, line, equipment,
+                work_order_id, work_order_number,
+                final_quantity, quantity_target, quantity_defect, uom, pct_complete,
+                final_oee, final_availability, final_performance, final_quality,
+                final_count_infeed, final_count_outfeed,
+                next_work_order_id, next_work_order_number,
+                duration_seconds
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            info.site, info.area, info.line, info.equipment,
+            prev_wo_id, prev_data.get("work_order_number"),
+            prev_data.get("quantity_actual"), prev_data.get("quantity_target"),
+            prev_data.get("quantity_defect"), prev_data.get("uom"), pct,
+            final_oee, final_avail, final_perf, final_qual,
+            final_infeed, final_outfeed,
+            next_wo_id, next_wo_number,
+            duration
+        ))
+        self.conn.commit()
+
+        print(f"\n[WO COMPLETED] {prev_data.get('work_order_number')} @ {info.site}/{info.line} "
+              f"qty={prev_data.get('quantity_actual')} -> {next_wo_number}")
 
     def _handle_asset(self, info: TopicInfo, field: str, value: Any):
         """Handle asset identifier data."""
