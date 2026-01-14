@@ -123,9 +123,31 @@ Example:
 
 ## Analysis Scripts
 
+### `analyze_data.py` (PRIMARY - Full Analysis)
+
+Comprehensive repeatable analysis covering all tracked issues:
+
+```bash
+python analyze_data.py                      # Full analysis to stdout
+python analyze_data.py --output report.txt  # Save to file
+python analyze_data.py --section wo         # Work orders only
+python analyze_data.py --section flow       # Process flow only
+python analyze_data.py --section products   # Product data only
+```
+
+**Covers issues:**
+- proveit2026-kax: Work order status analysis
+- proveit2026-pss: Process stage mapping
+- proveit2026-l01: Product/lot linkage
+- proveit2026-32p: Target vs actual quantities
+- proveit2026-ruj: Quantity overruns
+- proveit2026-4jz: Early WO closures
+- proveit2026-e1v: Cross-operation quantity flow
+- proveit2026-wg6: Product data accuracy
+
 ### `analyze_workorders.py`
 
-Comprehensive work order analysis:
+Work order lifecycle and patterns:
 
 ```bash
 python analyze_workorders.py              # Full analysis
@@ -164,28 +186,71 @@ python validate_capture.py
 
 ## Key Findings
 
-### 1. Multi-Site Manufacturing
+### 1. Work Order Status (proveit2026-kax)
+- ~20% COMPLETE (exceeded target)
+- ~15% IN_PROGRESS (50-95% of target)
+- ~55% STARTING (<50% of target)
+- ~10% NO_TARGET (no target quantity set)
+
+### 2. Target vs Actual (proveit2026-32p, proveit2026-ruj)
+- **Overruns are common**: Some WOs exceed target by 1500%+
+- Targets appear to be **MINIMUMS**, not hard limits
+- Example: WO-L03-0948 at 1579% of target
+
+### 3. Early Closures (proveit2026-4jz)
+- **YES, early closures occur**
+- WOs can be replaced before reaching target
+- Example: WO-L04-0142-P16 closed at 59.9% (2919/4875)
+
+### 4. Cross-Operation Quantity Flow (proveit2026-e1v)
+- Quantities **DO NOT** match across operations
+- UOM changes: kg → bottle → CS (cases)
+- Conversion factors vary by product (bottle size, pack count)
+
+### 5. Product Data Issues (proveit2026-wg6)
+- **BUG**: Products table has incorrect data
+- bottle_size = 0 (should be 0.5)
+- pack_count = 0 (should be 12/16/20/24)
+- Raw MQTT has correct values, collector not capturing
+
+### 6. Product/Lot Linkage (proveit2026-l01)
+- work_orders.product_id is NULL
+- work_orders.lot_id is NULL
+- Data EXISTS in raw MQTT, not linked in tables
+
+### 7. Multi-Site Manufacturing
 - Products flow between sites during manufacturing
 - Same WO number tracked across entire production chain
 - Not isolated per-equipment tracking
 
-### 2. UOM Indicates Process Stage
+### 8. UOM Indicates Process Stage
 - `kg` = raw materials (liquidprocessing)
 - `bottle` = filled bottles (fillerproduction)
 - `CS` = cases/packs (packaging)
 
-### 3. Pack Variants
+### 9. Pack Variants
 - `-P12`, `-P16`, `-P20`, `-P24` suffixes indicate pack size
 - Multiple variants can run from same base WO
 
-### 4. State Machine
-States captured: Running, Idle, CIP, Cleaning, Fill, Mix, Transfer, Planned Downtime, Unplanned Downtime
+### 10. State Machine
+States captured: Running, Idle, CIP, Cleaning, Fill, Mix, Transfer, Planned Downtime, Unplanned Downtime, Pasteurize
+
+---
+
+## Known Bugs / Issues
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| proveit2026-1eo | bottle_size and pack_count not captured correctly | Open |
+| proveit2026-tjq | Lots not linked to products | Open |
+| proveit2026-vbu | WO transition events not logged | Open |
+| proveit2026-cnx | Lot transition events not logged | Open |
 
 ---
 
 ## Open Questions
 
-See beads issues for tracking. Key unknowns:
+See `bd list --status=open` for current issues. Key unknowns:
 
 1. **Lot-Product Linking**: `lots.product_id` is always NULL - need correlation logic
 2. **Event Detection**: Are we capturing all WO/lot transitions as events?
