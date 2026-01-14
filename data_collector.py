@@ -58,14 +58,13 @@ def parse_topic(topic: str) -> TopicInfo | None:
     parts = topic.split("/")
     info = TopicInfo(topic=topic)
 
-    # Handle enterprise-level topics (Enterprise B/Node/...)
-    if len(parts) >= 2 and parts[1] in ("Node",):
+    # Handle enterprise-level topics (Enterprise B/Node/... or Enterprise B/Metric/...)
+    if len(parts) >= 2 and parts[1] in ("Node", "Metric"):
         info.site = None
         info.area = None
+        info.category = parts[1].lower()  # 'node' or 'metric'
         if len(parts) >= 3:
-            info.category = parts[2]
-        if len(parts) >= 4:
-            info.data_type = "/".join(parts[3:])
+            info.data_type = "/".join(parts[2:])
         return info
 
     if len(parts) >= 2:
