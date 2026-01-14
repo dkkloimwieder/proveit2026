@@ -35,8 +35,17 @@ class TopicInfo:
     data_type: str | None = None
 
 
+CATEGORY_NAMES = ("metric", "node", "workorder", "lotnumber", "processdata", "state")
+
+
 def parse_topic(topic: str) -> TopicInfo | None:
-    """Parse Enterprise B topic into components."""
+    """Parse Enterprise B topic into components.
+
+    Handles variable depth topics:
+    - Area-level: Site/area/category/data_type (6 parts)
+    - Line-level: Site/area/line/category/data_type (7 parts)
+    - Equipment-level: Site/area/line/equipment/category/data_type (8 parts)
+    """
     if not topic.startswith("Enterprise B/"):
         return None
 
@@ -51,14 +60,32 @@ def parse_topic(topic: str) -> TopicInfo | None:
         info.site = parts[1] if parts[1].startswith("Site") else None
     if len(parts) >= 3:
         info.area = parts[2]
+
+    # Detect topic depth by checking where category appears
     if len(parts) >= 4:
-        info.line = parts[3]
-    if len(parts) >= 5:
-        info.equipment = parts[4]
-    if len(parts) >= 6:
-        info.category = parts[5]
-    if len(parts) >= 7:
-        info.data_type = "/".join(parts[6:])
+        if parts[3] in CATEGORY_NAMES:
+            # Area-level: parts[3] is category
+            info.line = None
+            info.equipment = None
+            info.category = parts[3]
+            if len(parts) >= 5:
+                info.data_type = "/".join(parts[4:])
+        elif len(parts) >= 5 and parts[4] in CATEGORY_NAMES:
+            # Line-level: parts[3] is line, parts[4] is category
+            info.line = parts[3]
+            info.equipment = None
+            info.category = parts[4]
+            if len(parts) >= 6:
+                info.data_type = "/".join(parts[5:])
+        else:
+            # Equipment-level: standard structure
+            info.line = parts[3]
+            if len(parts) >= 5:
+                info.equipment = parts[4]
+            if len(parts) >= 6:
+                info.category = parts[5]
+            if len(parts) >= 7:
+                info.data_type = "/".join(parts[6:])
 
     return info
 
@@ -187,29 +214,46 @@ class DataCollector:
     def _process_data(self, info: TopicInfo, value: Any):
         """Route data to appropriate handler."""
         dt = info.data_type
+        cat = info.category
 
-        # Product/Item data
-        if dt and dt.startswith("item/"):
-            self._handle_product(info, dt[5:], value)
+        # Product/Item data (also nested under lotnumber/)
+        if dt and (dt.startswith("item/") or dt.startswith("lotnumber/item/")):
+            field = dt.split("/")[-1]  # Get last segment
+            self._handle_product(info, field, value)
 
-        # Lot data
-        elif dt and dt.startswith("lotnumber/"):
-            self._handle_lot(info, dt[10:], value)
+        # Lot data (direct or nested under workorder/)
+        elif dt and (dt.startswith("lotnumber/") or dt.startswith("workorder/lotnumber/")):
+            # Extract field from nested path
+            if "lotnumber/lotnumber" in dt:
+                self._handle_lot(info, "lotnumber", value)
+            elif "lotnumberid" in dt:
+                self._handle_lot(info, "lotnumberid", value)
+            elif dt.startswith("lotnumber/") and not dt.startswith("lotnumber/item/"):
+                self._handle_lot(info, dt[10:], value)
 
-        # Work order data
-        elif dt and dt.startswith("workorder/"):
+        # Work order data (direct fields under workorder/ prefix)
+        elif dt and dt.startswith("workorder/") and not dt.startswith("workorder/lotnumber/"):
             self._handle_work_order(info, dt[10:], value)
+
+        # Work order fields at workorder category level
+        elif cat == "workorder" and dt in ("quantityactual", "quantitydefect", "quantitytarget",
+                                            "workorderid", "workordernumber", "uom", "assetid"):
+            self._handle_work_order(info, dt, value)
 
         # State data
         elif dt and dt.startswith("state/"):
             self._handle_state(info, dt[6:], value)
 
-        # Asset identifier
+        # Asset identifier data
         elif dt and dt.startswith("assetidentifier/"):
             self._handle_asset(info, dt[16:], value)
+        elif cat == "node" and dt:
+            # node/assetidentifier/field -> dt is "assetidentifier/field"
+            if dt.startswith("assetidentifier/"):
+                self._handle_asset(info, dt[16:], value)
 
-        # Metrics
-        elif info.category == "metric" or dt in (
+        # Metrics (under metric category)
+        elif cat == "metric" or dt in (
             "availability", "performance", "quality", "oee",
             "input/countdefect", "input/countinfeed", "input/countoutfeed",
             "input/rateactual", "input/ratestandard",
@@ -218,7 +262,11 @@ class DataCollector:
         ):
             self._handle_metric(info, dt, value)
 
-        # Process data
+        # Process data counts/rates (under processdata category)
+        elif cat == "processdata" or (dt and dt.startswith("processdata/")):
+            self._handle_processdata(info, dt, value)
+
+        # Process measurements (temperature, flow, weight)
         elif dt and dt.startswith("process/"):
             self._handle_process(info, dt[8:], value)
 
@@ -389,6 +437,42 @@ class DataCollector:
             metrics.flow_rate.append(val)
         elif field == "weight":
             metrics.weight.append(val)
+
+    def _handle_processdata(self, info: TopicInfo, data_type: str, value: Any):
+        """Handle processdata counts, rates, and inputs."""
+        if not info.site or not info.line:
+            return
+
+        bucket_key = (self.current_bucket, info.site, info.line)
+        if bucket_key not in self.metric_buckets:
+            self.metric_buckets[bucket_key] = LineMetrics()
+
+        metrics = self.metric_buckets[bucket_key]
+        if info.equipment:
+            metrics.equipment_seen.add(info.equipment)
+
+        try:
+            val = float(value) if value not in (None, "") else None
+        except (ValueError, TypeError):
+            return
+
+        if val is None:
+            return
+
+        # Map processdata fields to metrics
+        # processdata/count/infeed, count/outfeed, count/defect
+        if "count/infeed" in data_type or data_type == "count/infeed":
+            metrics.count_infeed = int(val)
+        elif "count/outfeed" in data_type or data_type == "count/outfeed":
+            metrics.count_outfeed = int(val)
+        elif "count/defect" in data_type or data_type == "count/defect":
+            metrics.count_defect = int(val)
+        # processdata/rate/instant
+        elif "rate/instant" in data_type or data_type == "rate/instant":
+            metrics.rate_actual.append(val)
+        # processdata/input/infeedtooutfeed (yield ratio)
+        elif "infeedtooutfeed" in data_type:
+            pass  # Could track separately if needed
 
     # --- Reference data helpers ---
 
