@@ -194,8 +194,8 @@ def analyze_crosssite():
     cursor = conn.execute("""
         SELECT
             work_order_number,
-            GROUP_CONCAT(DISTINCT site || '/' || line, ' | ') as locations,
-            GROUP_CONCAT(DISTINCT uom, ', ') as uoms,
+            GROUP_CONCAT(DISTINCT site || '/' || line) as locations,
+            GROUP_CONCAT(DISTINCT uom) as uoms,
             COUNT(DISTINCT site) as site_count,
             COUNT(DISTINCT line) as line_count
         FROM work_orders
