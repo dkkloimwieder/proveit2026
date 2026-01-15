@@ -280,7 +280,92 @@ Multiple FILL orders can draw from the same mix batch. No 1:1 WO tracking.
 
 Run analysis: `python analyze_data.py --section targets`
 
-### 12. Metrics Collection Per Process (proveit2026-2r1)
+### 12. Bill of Materials (BOM) Estimates
+
+> **⚠️ PRELIMINARY DATA**: Analysis based on ~7 hours of MQTT collection. Rates and ratios may change with more data. MIX stage lacks direct rate metrics - values derived from OEE calculations.
+
+#### Product Structure
+```
+2 Base Products: Cola, Orange
+       ↓
+2 Mix Products: Cola Mix, Orange Soda Mix
+       ↓
+2 Bottle Products: Cola Soda 0.5L, Orange Soda 0.5L
+       ↓
+10 Pack Variants: 4, 6, 12, 16, 20, 24 packs
+```
+
+#### BOM Conversions
+
+| Conversion | Formula | Source |
+|------------|---------|--------|
+| PACK → BOTTLE | `Bottles = Cases × Pack Size` | Verified from WO targets |
+| BOTTLE → MIX | `Mix (kg) = Bottles × 0.5` | Theoretical (0.5L bottle, ~1 kg/L density) |
+
+Pack sizes: 4, 6, 12, 16, 20, 24 bottles per case
+
+#### Production Rates (OEE-backed estimates)
+
+| Stage | Standard Rate | Availability | Effective Rate | Equipment |
+|-------|---------------|--------------|----------------|-----------|
+| MIX | ~381 kg/min* | 61% | 466 bottles/min equiv | 4 vats |
+| FILL | 289 bottles/min | 89% | 258 bottles/min | 3 lines |
+| PACK | 282 cases/min | 76% | 215 cases/min | 4 lines |
+
+*MIX rate derived from WO output ÷ (duration × availability). No direct `ratestandard` metric available.
+
+#### MIX → FILL Work Order Relationship
+
+```
+WO Naming: MIX uses L01/L02, FILL uses L03/L04 (disconnected series)
+
+1 MIX WO (~20,000 kg = 40,000 bottles equiv)
+    ↓
+~1.8 FILL WOs (~22,500 bottles each)
+
+System throughput per hour:
+  MIX: 2.8 WOs worth (1,862 bottles/min × 4 vats)
+  FILL: 2.1 WOs worth (258 bottles/min × 3 lines)
+
+  → MIX oversupplies FILL by ~2.4x
+  → Inventory accumulates in tanks between stages
+```
+
+#### Data Gaps
+- MIX `rateactual` and `ratestandard` metrics are 0 in MQTT
+- MIX rate estimated from WO completions + OEE, not direct measurement
+- Limited WO completion samples (19 completions observed)
+- Unknown: actual tank inventory levels, transfer timing between stages
+
+#### Products by Line
+
+**MIX (mixroom)**
+| Product | Sites |
+|---------|-------|
+| Cola Mix | Site1, Site2, Site3 |
+| Orange Soda Mix | Site1, Site2 |
+
+**FILL (fillingline)**
+| Product | Lines |
+|---------|-------|
+| Cola Soda 0.5L | Site1/fill02, Site1/fill03, Site2/fill01, Site2/fill02, Site3/fill01 |
+| Orange Soda 0.5L | Site1/fill01, Site1/fill03, Site2/fill01, Site2/fill02 |
+
+**PACK (labelerline)**
+| Product | Lines |
+|---------|-------|
+| Cola 0.5L 4Pk | Site1/label02, Site2/label02 |
+| Cola 0.5L 6Pk | Site2/label01, Site3/label01 |
+| Cola 0.5L 12Pk | Site1/label03 |
+| Cola 0.5L 16Pk | Site1/label02, Site1/label04 |
+| Cola 0.5L 20Pk | Site1/label02, Site3/label01 |
+| Cola 0.5L 24Pk | Site1/label03, Site3/label01 |
+| Orange 0.5L 12Pk | Site1/label04, Site2/label02 |
+| Orange 0.5L 16Pk | Site1/label01, Site2/label01 |
+| Orange 0.5L 20Pk | Site1/label01 |
+| Orange 0.5L 24Pk | Site1/label03 |
+
+### 13. Metrics Collection Per Process (proveit2026-2r1)
 - **work_orders.quantity_actual** = SNAPSHOT (last MQTT value per WO/site/line)
 - **metrics_10s** = AGGREGATED counts every 10 seconds (summed across equipment)
 - WO quantities come from LINE-level MQTT topics
@@ -306,7 +391,7 @@ MQTT Equipment-level metric topic:
 |-------|-------------|--------|
 | proveit2026-1eo | bottle_size and pack_count not captured correctly | Open |
 | proveit2026-tjq | Lots not linked to products | Open |
-| proveit2026-vbu | WO transition events not logged | Open |
+| proveit2026-vbu | WO transition events not logged | **Fixed** - see `work_order_completions` table |
 | proveit2026-cnx | Lot transition events not logged | Open |
 
 ---
