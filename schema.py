@@ -261,6 +261,110 @@ CREATE TABLE IF NOT EXISTS topics (
 CREATE INDEX IF NOT EXISTS idx_topics_site ON topics(site);
 
 -- ============================================================
+-- VIEWS FOR CLEAN ANALYSIS (handles simulator replay duplicates)
+-- ============================================================
+
+-- Production by line (from completions - each completion is unique)
+CREATE VIEW IF NOT EXISTS v_production_by_line AS
+SELECT
+    site,
+    line,
+    CASE
+        WHEN line LIKE 'mixroom%' THEN 'MIX'
+        WHEN line LIKE 'filling%' THEN 'FILL'
+        WHEN line LIKE 'labeler%' THEN 'PACK'
+        WHEN line LIKE 'palletizer%' THEN 'PALLETIZE'
+        ELSE 'OTHER'
+    END as stage,
+    COUNT(*) as wo_completions,
+    SUM(final_quantity) as total_output,
+    AVG(final_quantity) as avg_per_wo,
+    AVG(pct_complete) as avg_completion_pct,
+    MIN(completed_at) as first_completion,
+    MAX(completed_at) as last_completion
+FROM work_order_completions
+WHERE final_quantity > 0
+GROUP BY site, line;
+
+-- Production by stage (aggregated across lines)
+CREATE VIEW IF NOT EXISTS v_production_by_stage AS
+SELECT
+    CASE
+        WHEN line LIKE 'mixroom%' THEN 'MIX'
+        WHEN line LIKE 'filling%' THEN 'FILL'
+        WHEN line LIKE 'labeler%' THEN 'PACK'
+        WHEN line LIKE 'palletizer%' THEN 'PALLETIZE'
+        ELSE 'OTHER'
+    END as stage,
+    CASE
+        WHEN line LIKE 'mixroom%' THEN 'kg'
+        WHEN line LIKE 'filling%' THEN 'bottle'
+        WHEN line LIKE 'labeler%' THEN 'CS'
+        ELSE '?'
+    END as uom,
+    COUNT(DISTINCT site || '/' || line) as line_count,
+    COUNT(*) as wo_completions,
+    SUM(final_quantity) as total_output,
+    AVG(final_quantity) as avg_per_wo,
+    AVG(pct_complete) as avg_completion_pct
+FROM work_order_completions
+WHERE final_quantity > 0
+GROUP BY stage;
+
+-- OEE by line (from metrics_10s - already deduplicated by bucket)
+CREATE VIEW IF NOT EXISTS v_oee_by_line AS
+SELECT
+    site,
+    line,
+    CASE
+        WHEN line LIKE 'mixroom%' THEN 'MIX'
+        WHEN line LIKE 'filling%' THEN 'FILL'
+        WHEN line LIKE 'labeler%' THEN 'PACK'
+        WHEN line LIKE 'palletizer%' THEN 'PALLETIZE'
+        ELSE 'OTHER'
+    END as stage,
+    COUNT(*) as buckets,
+    ROUND(AVG(availability) * 100, 1) as avg_availability_pct,
+    ROUND(AVG(performance) * 100, 1) as avg_performance_pct,
+    ROUND(AVG(quality) * 100, 1) as avg_quality_pct,
+    ROUND(AVG(oee) * 100, 1) as avg_oee_pct,
+    SUM(count_outfeed) as total_outfeed,
+    AVG(rate_actual) as avg_rate_actual,
+    AVG(rate_standard) as avg_rate_standard
+FROM metrics_10s
+WHERE oee IS NOT NULL
+GROUP BY site, line;
+
+-- Duplicate WO detection (for data quality checks)
+CREATE VIEW IF NOT EXISTS v_duplicate_work_orders AS
+SELECT
+    work_order_number,
+    COUNT(DISTINCT work_order_id) as id_count,
+    COUNT(DISTINCT site || '/' || line) as location_count,
+    GROUP_CONCAT(DISTINCT work_order_id) as work_order_ids,
+    GROUP_CONCAT(DISTINCT site || '/' || line) as locations,
+    CASE
+        WHEN COUNT(DISTINCT work_order_id) > COUNT(DISTINCT site || '/' || line)
+        THEN 'REPLAY_DUPLICATE'
+        ELSE 'CROSS_SITE'
+    END as duplicate_type
+FROM work_orders
+GROUP BY work_order_number
+HAVING COUNT(DISTINCT work_order_id) > 1;
+
+-- Current replay position (from latest metadata)
+CREATE VIEW IF NOT EXISTS v_replay_status AS
+SELECT
+    received_at,
+    json_extract(payload_text, '$.virtual_devices.Site1.progress_pct') as progress_pct,
+    json_extract(payload_text, '$.virtual_devices.Site1.data_timestamp') as data_timestamp,
+    json_extract(payload_text, '$.generated_at') as generated_at
+FROM messages_raw
+WHERE topic = 'Enterprise B/metadata'
+ORDER BY received_at DESC
+LIMIT 1;
+
+-- ============================================================
 -- SCHEMA VERSION
 -- ============================================================
 
@@ -271,7 +375,7 @@ CREATE TABLE IF NOT EXISTS schema_info (
 );
 
 INSERT OR IGNORE INTO schema_info (version, description)
-VALUES (2, 'v2: Reference tables, events log, 10s metric buckets');
+VALUES (3, 'v3: Added views for clean analysis (replay-aware)');
 """
 
 

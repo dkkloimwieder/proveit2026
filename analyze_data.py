@@ -14,6 +14,7 @@ This script provides repeatable analysis queries for:
 
 Usage:
     python analyze_data.py                      # Full analysis
+    python analyze_data.py --section clean      # Clean analysis (replay-aware)
     python analyze_data.py --section wo         # Work orders only
     python analyze_data.py --section flow       # Process flow only
     python analyze_data.py --section targets    # Stage-to-stage targets
@@ -829,12 +830,212 @@ def show_summary(output):
 
 
 # =============================================================================
+# CLEAN ANALYSIS (handles simulator replay duplicates)
+# =============================================================================
+
+def analyze_replay_status(output):
+    """Show current simulator replay status."""
+    print_header("SIMULATOR REPLAY STATUS", output)
+
+    conn = get_connection()
+
+    # Get replay status
+    cursor = conn.execute("SELECT * FROM v_replay_status")
+    row = cursor.fetchone()
+
+    if row:
+        output.write(f"\nCurrent replay position:\n")
+        output.write(f"  Progress: {float(row['progress_pct']) * 100:.2f}%\n")
+        output.write(f"  Original data timestamp: {row['data_timestamp']}\n")
+        output.write(f"  Replay timestamp: {row['generated_at']}\n")
+        output.write(f"  Last update: {row['received_at']}\n")
+
+        # Estimate time until reset
+        progress = float(row['progress_pct'])
+        remaining = 1.0 - progress
+        hours_until_reset = remaining / 0.0066  # ~0.66% per hour
+        output.write(f"\n  Estimated hours until 100% (reset): {hours_until_reset:.1f}\n")
+    else:
+        output.write("  (no metadata available)\n")
+
+    # Show duplicate WO impact
+    cursor = conn.execute("""
+        SELECT duplicate_type, COUNT(*) as count
+        FROM v_duplicate_work_orders
+        GROUP BY duplicate_type
+    """)
+    rows = [(r['duplicate_type'], r['count']) for r in cursor]
+
+    output.write("\n## Duplicate Work Order Impact\n")
+    print_table(['Type', 'Count'], rows, output)
+
+    cursor = conn.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM work_orders) as total_rows,
+            (SELECT COUNT(DISTINCT work_order_number) FROM work_orders) as unique_numbers,
+            (SELECT COUNT(*) FROM v_duplicate_work_orders WHERE duplicate_type = 'REPLAY_DUPLICATE') as replay_dupes
+    """)
+    row = cursor.fetchone()
+    output.write(f"\n  Total WO rows: {row['total_rows']}\n")
+    output.write(f"  Unique WO numbers: {row['unique_numbers']}\n")
+    output.write(f"  Replay duplicates: {row['replay_dupes']} ({100*row['replay_dupes']/row['unique_numbers']:.1f}% of unique numbers)\n")
+
+    conn.close()
+
+
+def analyze_clean_production(output):
+    """Production analysis using clean views (handles duplicates)."""
+    print_header("CLEAN PRODUCTION ANALYSIS (from completions)", output)
+
+    conn = get_connection()
+
+    output.write("\n## Production by Stage\n")
+    output.write("(Each work order completion counted once - handles replay duplicates)\n")
+
+    cursor = conn.execute("SELECT * FROM v_production_by_stage ORDER BY stage")
+    rows = [(r['stage'], r['uom'], r['line_count'], r['wo_completions'],
+             int(r['total_output']), int(r['avg_per_wo']),
+             f"{r['avg_completion_pct']:.1f}%")
+            for r in cursor]
+    print_table(['Stage', 'UOM', 'Lines', 'WO Completions', 'Total Output', 'Avg/WO', 'Avg %Complete'],
+                rows, output)
+
+    output.write("\n## Production by Line\n")
+    cursor = conn.execute("SELECT * FROM v_production_by_line ORDER BY stage, site, line")
+    rows = [(r['site'], r['line'], r['stage'], r['wo_completions'],
+             int(r['total_output']), int(r['avg_per_wo']),
+             f"{r['avg_completion_pct']:.1f}%")
+            for r in cursor]
+    print_table(['Site', 'Line', 'Stage', 'WO Completions', 'Total Output', 'Avg/WO', 'Avg %Complete'],
+                rows, output)
+
+    conn.close()
+
+
+def analyze_clean_oee(output):
+    """OEE analysis using clean views."""
+    print_header("CLEAN OEE ANALYSIS (from metrics_10s)", output)
+
+    conn = get_connection()
+
+    output.write("\n## OEE by Stage\n")
+    output.write("(Metrics are time-bucketed, no duplicates)\n")
+
+    cursor = conn.execute("""
+        SELECT
+            stage,
+            COUNT(*) as lines,
+            SUM(buckets) as total_buckets,
+            ROUND(AVG(avg_availability_pct), 1) as availability,
+            ROUND(AVG(avg_performance_pct), 1) as performance,
+            ROUND(AVG(avg_quality_pct), 1) as quality,
+            ROUND(AVG(avg_oee_pct), 1) as oee,
+            SUM(total_outfeed) as total_outfeed
+        FROM v_oee_by_line
+        WHERE stage IN ('MIX', 'FILL', 'PACK')
+        GROUP BY stage
+        ORDER BY stage
+    """)
+    rows = [(r['stage'], r['lines'], r['total_buckets'],
+             f"{r['availability']}%", f"{r['performance']}%",
+             f"{r['quality']}%", f"{r['oee']}%",
+             int(r['total_outfeed']) if r['total_outfeed'] else 0)
+            for r in cursor]
+    print_table(['Stage', 'Lines', 'Buckets', 'Avail', 'Perf', 'Qual', 'OEE', 'Total Outfeed'],
+                rows, output)
+
+    output.write("\n## OEE by Line (Production Stages Only)\n")
+    cursor = conn.execute("""
+        SELECT * FROM v_oee_by_line
+        WHERE stage IN ('MIX', 'FILL', 'PACK')
+        ORDER BY stage, site, line
+    """)
+    rows = [(r['site'], r['line'], r['stage'],
+             f"{r['avg_availability_pct']}%", f"{r['avg_performance_pct']}%",
+             f"{r['avg_quality_pct']}%", f"{r['avg_oee_pct']}%",
+             int(r['total_outfeed']) if r['total_outfeed'] else 0,
+             f"{r['avg_rate_actual']:.1f}" if r['avg_rate_actual'] else "-")
+            for r in cursor]
+    print_table(['Site', 'Line', 'Stage', 'Avail', 'Perf', 'Qual', 'OEE', 'Outfeed', 'Rate'],
+                rows, output)
+
+    conn.close()
+
+
+def analyze_clean_rates(output):
+    """Rate analysis - actual throughput from clean data."""
+    print_header("CLEAN RATE ANALYSIS", output)
+
+    conn = get_connection()
+
+    output.write("\n## Throughput Rates by Line\n")
+    output.write("(Calculated from metrics_10s over collection period)\n")
+
+    cursor = conn.execute("""
+        SELECT
+            site, line,
+            CASE
+                WHEN line LIKE 'mixroom%' THEN 'MIX'
+                WHEN line LIKE 'filling%' THEN 'FILL'
+                WHEN line LIKE 'labeler%' THEN 'PACK'
+                ELSE 'OTHER'
+            END as stage,
+            COUNT(*) as buckets,
+            SUM(count_outfeed) as total_outfeed,
+            ROUND(SUM(count_outfeed) * 1.0 / COUNT(*) / 10, 1) as units_per_sec,
+            ROUND(SUM(count_outfeed) * 6.0 / COUNT(*), 1) as units_per_min,
+            AVG(rate_standard) as std_rate
+        FROM metrics_10s
+        WHERE count_outfeed > 0
+        GROUP BY site, line
+        HAVING stage IN ('FILL', 'PACK')
+        ORDER BY stage, site, line
+    """)
+    rows = [(r['site'], r['line'], r['stage'],
+             int(r['total_outfeed']), f"{r['units_per_sec']}", f"{r['units_per_min']}",
+             f"{r['std_rate']:.1f}" if r['std_rate'] else "-")
+            for r in cursor]
+    print_table(['Site', 'Line', 'Stage', 'Total Output', 'Units/sec', 'Units/min', 'Std Rate'],
+                rows, output)
+
+    # Duration-based calculation
+    output.write("\n## Duration-Based Rates (from WO completions)\n")
+    cursor = conn.execute("""
+        SELECT
+            site, line,
+            CASE
+                WHEN line LIKE 'mixroom%' THEN 'MIX'
+                WHEN line LIKE 'filling%' THEN 'FILL'
+                WHEN line LIKE 'labeler%' THEN 'PACK'
+                ELSE 'OTHER'
+            END as stage,
+            COUNT(*) as completions,
+            SUM(final_quantity) as total_qty,
+            SUM(duration_seconds) as total_duration_sec,
+            ROUND(SUM(final_quantity) * 60.0 / NULLIF(SUM(duration_seconds), 0), 1) as actual_rate_per_min
+        FROM work_order_completions
+        WHERE final_quantity > 0 AND duration_seconds > 0
+        GROUP BY site, line
+        ORDER BY stage, site, line
+    """)
+    rows = [(r['site'], r['line'], r['stage'], r['completions'],
+             int(r['total_qty']),
+             f"{r['total_duration_sec']/3600:.1f}h" if r['total_duration_sec'] else "-",
+             r['actual_rate_per_min'] or "-")
+            for r in cursor]
+    print_table(['Site', 'Line', 'Stage', 'WOs', 'Total Qty', 'Duration', 'Rate/min'],
+                rows, output)
+
+    conn.close()
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive data analysis")
-    parser.add_argument("--section", choices=['wo', 'flow', 'products', 'metrics', 'targets', 'all'],
+    parser.add_argument("--section", choices=['wo', 'flow', 'products', 'metrics', 'targets', 'clean', 'all'],
                         default='all', help="Section to analyze")
     parser.add_argument("--output", type=str, help="Output file (default: stdout)")
     args = parser.parse_args()
@@ -852,6 +1053,12 @@ def main():
         output.write(f"# Database: {DB_PATH}\n")
 
         show_summary(output)
+
+        if args.section in ['clean', 'all']:
+            analyze_replay_status(output)
+            analyze_clean_production(output)
+            analyze_clean_oee(output)
+            analyze_clean_rates(output)
 
         if args.section in ['wo', 'all']:
             analyze_wo_status(output)

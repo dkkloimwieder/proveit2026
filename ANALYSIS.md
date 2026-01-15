@@ -385,12 +385,83 @@ MQTT Equipment-level metric topic:
 
 ---
 
+## Simulator Replay Behavior
+
+> **⚠️ CRITICAL**: The MQTT data is **simulated replay data** from a historical dataset. This affects data integrity and analysis.
+
+### How the Simulator Works
+
+The MQTT broker replays historical manufacturing data from November 2025. Metadata topic reveals:
+
+```json
+{
+  "data_timestamp": "2025-11-04T16:57:19Z",  // Original recording time
+  "timestamp": "2026-01-14T18:29:50Z",        // Current replay time
+  "progress_pct": 0.5508...                   // 55% through the dataset
+}
+```
+
+- **Progress rate**: ~0.66% per hour (~11.9% per 18 hours)
+- **Reset expected**: When `progress_pct` reaches 1.0, data will loop back to start
+- **ID regeneration**: Same WO/lot numbers get NEW IDs on each replay cycle
+
+### Impact on Data
+
+| Entity | Unique Constraint | Replay Behavior | Impact |
+|--------|-------------------|-----------------|--------|
+| work_orders | work_order_id | New ID assigned per replay | 40% of WO numbers have multiple IDs |
+| lots | lot_number_id | New ID assigned per replay | Minimal observed so far |
+| products | item_id | Stable across replay | No duplicates |
+| metrics_10s | (bucket, site, line) | Overwrites per bucket | Clean - no duplicates |
+
+### Example: Duplicate Work Order
+
+```
+WO-L04-0292 on Site2/mixroom01:
+  ID 1476 @ 04:59 → qty 40,257, target 3,375 (1192% complete)
+  ID 538  @ 06:41 → qty 6,777,  target 9,000 (75% complete)
+```
+
+These are two different "runs" of the same WO number from different points in the replay.
+
+### Clean Analysis Queries
+
+**WRONG** - Double-counts production:
+```sql
+SELECT work_order_number, SUM(final_quantity)
+FROM work_order_completions
+GROUP BY work_order_number;
+```
+
+**CORRECT** - Each completion is a unique event:
+```sql
+SELECT work_order_id, work_order_number, final_quantity
+FROM work_order_completions;
+-- OR for totals by line:
+SELECT site, line, SUM(final_quantity) as total
+FROM work_order_completions
+GROUP BY site, line;
+```
+
+### Detecting Replay Position
+
+```sql
+SELECT
+    json_extract(payload_text, '$.virtual_devices.Site1.progress_pct') as progress
+FROM messages_raw
+WHERE topic = 'Enterprise B/metadata'
+ORDER BY received_at DESC
+LIMIT 1;
+```
+
+---
+
 ## Known Bugs / Issues
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| proveit2026-1eo | bottle_size and pack_count not captured correctly | Open |
-| proveit2026-tjq | Lots not linked to products | Open |
+| proveit2026-1eo | bottle_size and pack_count not captured correctly | **Fixed** |
+| proveit2026-tjq | Lots not linked to products | **Fixed** |
 | proveit2026-vbu | WO transition events not logged | **Fixed** - see `work_order_completions` table |
 | proveit2026-cnx | Lot transition events not logged | Open |
 
