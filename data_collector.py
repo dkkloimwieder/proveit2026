@@ -303,24 +303,34 @@ class DataCollector:
             self._handle_process(info, dt[8:], value)
 
     def _handle_product(self, info: TopicInfo, field: str, value: Any):
-        """Handle product/item data."""
-        if field == "itemid" and value:
-            item_id = int(value)
-            if item_id not in self.pending_products:
-                self.pending_products[item_id] = {"item_id": item_id}
-        elif field == "itemname" and self.pending_products:
-            # Associate with most recent item_id
-            for p in self.pending_products.values():
-                if "name" not in p:
-                    p["name"] = str(value)
-                    break
-        elif field in ("itemclass", "bottlesize", "packcount", "labelvariant", "parentitemid"):
-            for p in self.pending_products.values():
-                if field not in p:
-                    p[field.replace("item", "")] = value
-                    break
+        """Handle product/item data - accumulate by path then flush when complete."""
+        path_key = f"{info.site}/{info.area}/{info.line}/{info.equipment}"
 
-        self._flush_pending_products()
+        if path_key not in self.pending_products:
+            self.pending_products[path_key] = {}
+
+        product = self.pending_products[path_key]
+
+        if field == "itemid" and value:
+            product["item_id"] = int(value)
+        elif field == "itemname" and value:
+            product["name"] = str(value)
+        elif field == "itemclass" and value:
+            product["class"] = str(value)
+        elif field == "bottlesize":
+            product["bottlesize"] = float(value) if value else 0
+        elif field == "packcount":
+            product["packcount"] = int(value) if value else 0
+        elif field == "labelvariant":
+            product["labelvariant"] = str(value) if value else None
+        elif field == "parentitemid":
+            product["parentitemid"] = int(value) if value else None
+
+        # Flush when we have all expected fields (item_id, name, class, bottlesize, packcount)
+        required = {"item_id", "name", "class", "bottlesize", "packcount"}
+        if required.issubset(product.keys()):
+            self._flush_pending_product(path_key, product)
+            del self.pending_products[path_key]
 
     def _handle_lot(self, info: TopicInfo, field: str, value: Any):
         """Handle lot data - accumulate by path then flush when complete."""
@@ -705,33 +715,44 @@ class DataCollector:
             return row[0]
         return 0
 
-    def _flush_pending_products(self):
-        """Flush pending products to database."""
+    def _flush_pending_product(self, path_key: str, data: dict):
+        """Flush a single product to database."""
         cursor = self.conn.cursor()
-        for item_id, data in list(self.pending_products.items()):
-            if "name" in data:  # Only flush complete records
-                cursor.execute("""
-                    INSERT INTO products (item_id, name, item_class, bottle_size, pack_count, label_variant, parent_item_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(item_id) DO UPDATE SET
-                        name = COALESCE(excluded.name, name),
-                        item_class = COALESCE(excluded.item_class, item_class),
-                        updated_at = CURRENT_TIMESTAMP
-                """, (
-                    data.get("item_id"),
-                    data.get("name"),
-                    data.get("class"),
-                    data.get("bottlesize"),
-                    data.get("packcount"),
-                    data.get("labelvariant"),
-                    data.get("parentitemid")
-                ))
-                cursor.execute("SELECT id FROM products WHERE item_id = ?", (item_id,))
-                row = cursor.fetchone()
-                if row:
-                    self.product_cache[item_id] = row[0]
-                del self.pending_products[item_id]
+        item_id = data.get("item_id")
+        if not item_id:
+            return
+        cursor.execute("""
+            INSERT INTO products (item_id, name, item_class, bottle_size, pack_count, label_variant, parent_item_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(item_id) DO UPDATE SET
+                name = COALESCE(excluded.name, name),
+                item_class = COALESCE(excluded.item_class, item_class),
+                bottle_size = COALESCE(excluded.bottle_size, bottle_size),
+                pack_count = COALESCE(excluded.pack_count, pack_count),
+                label_variant = COALESCE(excluded.label_variant, label_variant),
+                parent_item_id = COALESCE(excluded.parent_item_id, parent_item_id),
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            item_id,
+            data.get("name"),
+            data.get("class"),
+            data.get("bottlesize"),
+            data.get("packcount"),
+            data.get("labelvariant"),
+            data.get("parentitemid")
+        ))
+        cursor.execute("SELECT id FROM products WHERE item_id = ?", (item_id,))
+        row = cursor.fetchone()
+        if row:
+            self.product_cache[item_id] = row[0]
         self.conn.commit()
+
+    def _flush_pending_products(self):
+        """Flush all pending products to database."""
+        for path_key, data in list(self.pending_products.items()):
+            if "item_id" in data and "name" in data:
+                self._flush_pending_product(path_key, data)
+        self.pending_products.clear()
 
     def _flush_pending_lots(self):
         """Flush pending lots to database."""
