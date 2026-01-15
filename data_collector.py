@@ -313,6 +313,9 @@ class DataCollector:
 
         if field == "itemid" and value:
             product["item_id"] = int(value)
+            # Also store in pending_lots for linking
+            if path_key in self.pending_lots:
+                self.pending_lots[path_key]["item_id"] = int(value)
         elif field == "itemname" and value:
             product["name"] = str(value)
         elif field == "itemclass" and value:
@@ -760,13 +763,23 @@ class DataCollector:
         for path_key, data in list(self.pending_lots.items()):
             if "lot_number_id" in data and "lot_number" in data:
                 lot_num_id = data["lot_number_id"]
+
+                # Try to link to product via item_id in lot data, pending_products, or cache
+                product_id = None
+                item_id = data.get("item_id")  # Stored when item/itemid arrived
+                if not item_id and path_key in self.pending_products:
+                    item_id = self.pending_products[path_key].get("item_id")
+                if item_id:
+                    product_id = self.product_cache.get(item_id)
+
                 cursor.execute("""
-                    INSERT INTO lots (lot_number_id, lot_number)
-                    VALUES (?, ?)
+                    INSERT INTO lots (lot_number_id, lot_number, product_id)
+                    VALUES (?, ?, ?)
                     ON CONFLICT(lot_number_id) DO UPDATE SET
                         lot_number = COALESCE(excluded.lot_number, lot_number),
+                        product_id = COALESCE(excluded.product_id, product_id),
                         updated_at = CURRENT_TIMESTAMP
-                """, (lot_num_id, data.get("lot_number")))
+                """, (lot_num_id, data.get("lot_number"), product_id))
                 cursor.execute("SELECT id FROM lots WHERE lot_number_id = ?", (lot_num_id,))
                 row = cursor.fetchone()
                 if row:
