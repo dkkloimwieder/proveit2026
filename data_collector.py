@@ -677,6 +677,13 @@ class DataCollector:
         # processdata/rate/instant
         elif "rate/instant" in data_type or data_type == "rate/instant":
             metrics.rate_actual.append(val)
+        # processdata/process/temperature, flowrate, weight
+        elif "process/temperature" in data_type:
+            metrics.temperature.append(val)
+        elif "process/flowrate" in data_type:
+            metrics.flow_rate.append(val)
+        elif "process/weight" in data_type:
+            metrics.weight.append(val)
         # processdata/input/infeedtooutfeed (yield ratio)
         elif "infeedtooutfeed" in data_type:
             pass  # Could track separately if needed
