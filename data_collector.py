@@ -915,6 +915,22 @@ class DataCollector:
         conn.close()
 
 
+def get_collector(enterprise: str, capture_raw: bool = False):
+    """Get the appropriate collector for an enterprise."""
+    enterprise = enterprise.upper()
+    db_path = get_db_path(enterprise)
+
+    if enterprise == "A":
+        from collectors.enterprise_a import EnterpriseACollector
+        return EnterpriseACollector(db_path=db_path, capture_raw=capture_raw)
+    elif enterprise == "C":
+        from collectors.enterprise_c import EnterpriseCCollector
+        return EnterpriseCCollector(db_path=db_path, capture_raw=capture_raw)
+    else:
+        # Default to Enterprise B (original DataCollector)
+        return DataCollector(enterprise=enterprise, capture_raw=capture_raw)
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Collect enterprise MQTT data")
@@ -929,12 +945,13 @@ def main():
     db_path = get_db_path(enterprise)
 
     if args.reset:
-        from schema import reset_db
-        reset_db(db_path)
-    else:
-        init_db(db_path)
+        from pathlib import Path
+        path = Path(db_path)
+        if path.exists():
+            path.unlink()
+            print(f"Deleted: {path}")
 
-    collector = DataCollector(enterprise=enterprise, capture_raw=args.raw)
+    collector = get_collector(enterprise, capture_raw=args.raw)
     client = MQTTClient()
     client.add_message_handler(collector.handle_message)
 
