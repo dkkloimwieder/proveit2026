@@ -464,6 +464,8 @@ LIMIT 1;
 | proveit2026-tjq | Lots not linked to products | **Fixed** |
 | proveit2026-vbu | WO transition events not logged | **Fixed** - see `work_order_completions` table |
 | proveit2026-cnx | Lot transition events not logged | Open |
+| - | MQTT client_id collision causing disconnects | **Fixed** - unique client_id per instance |
+| - | Process data (temp/flow/weight) not captured | **Fixed** - now stored in metrics_10s |
 
 ---
 
@@ -471,9 +473,8 @@ LIMIT 1;
 
 See `bd list --status=open` for current issues. Key unknowns:
 
-1. **Lot-Product Linking**: `lots.product_id` is always NULL - need correlation logic
-2. **Event Detection**: Are we capturing all WO/lot transitions as events?
-3. **Metrics Aggregation**: How should line-level metrics aggregate equipment data?
+1. **Event Detection**: Are we capturing all WO/lot transitions as events?
+2. **Metrics Aggregation**: How should line-level metrics aggregate equipment data?
 
 ---
 
@@ -482,7 +483,13 @@ See `bd list --status=open` for current issues. Key unknowns:
 Run continuous collection:
 
 ```bash
-python data_collector.py
+python data_collector.py          # Standard collection
+python data_collector.py --raw    # Also capture raw MQTT messages
+```
+
+**Note**: Raw messages consume ~160 MB/hour. Purge with:
+```sql
+DELETE FROM messages_raw; VACUUM;
 ```
 
 The collector:

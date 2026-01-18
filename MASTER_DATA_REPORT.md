@@ -1,6 +1,11 @@
 # Enterprise B Master Data Report
 
-Generated: 2026-01-15
+Generated: 2026-01-15 | Updated: 2026-01-16
+
+> **Validated**: Initial analysis (18h) confirmed against extended dataset (30h+).
+> OEE stable within 0.1%. Production rates 15-30% higher than initial estimates but
+> bottleneck analysis unchanged. FILL remains system constraint at 84 bottles/min
+> vs MIX output of 210 bottles equiv/min (2.5x oversupply).
 
 ## 1. Product Hierarchy
 
