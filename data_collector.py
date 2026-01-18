@@ -1,9 +1,11 @@
-"""Data collector for Enterprise B manufacturing data.
+"""Data collector for enterprise manufacturing data.
 
 Collects MQTT data into SQLite with:
 - Reference tables for products, lots, work orders, states
 - Event log for state/lot/work order changes
 - 10-second bucketed metrics by line
+
+Supports multiple enterprises with different topic structures.
 """
 
 import json
@@ -18,96 +20,28 @@ from typing import Any
 
 from mqtt_client import MQTTClient
 from schema import get_connection, init_db
-
-# Topics to ignore
-IGNORED_PREFIXES = ("maintainx/", "abelara/", "roeslein/")
+from parsers import TopicInfo, BaseParser, EnterpriseAParser, EnterpriseBParser, EnterpriseCParser
 
 
-@dataclass
-class TopicInfo:
-    """Parsed topic information."""
-    topic: str
-    site: str | None = None
-    area: str | None = None
-    line: str | None = None
-    equipment: str | None = None
-    category: str | None = None
-    data_type: str | None = None
+# Registry of available enterprise parsers
+ENTERPRISE_PARSERS: dict[str, type[BaseParser]] = {
+    "A": EnterpriseAParser,
+    "B": EnterpriseBParser,
+    "C": EnterpriseCParser,
+}
 
 
-CATEGORY_NAMES = ("metric", "node", "workorder", "lotnumber", "processdata", "state")
+def get_parser(enterprise: str) -> BaseParser:
+    """Get parser instance for an enterprise."""
+    parser_class = ENTERPRISE_PARSERS.get(enterprise.upper())
+    if not parser_class:
+        raise ValueError(f"Unknown enterprise: {enterprise}. Available: {list(ENTERPRISE_PARSERS.keys())}")
+    return parser_class()
 
 
-def parse_topic(topic: str) -> TopicInfo | None:
-    """Parse Enterprise B topic into components.
-
-    Handles variable depth topics:
-    - Enterprise-level: Node/category/data_type (4 parts)
-    - Site-level: Site/node/category/data_type (5 parts)
-    - Area-level: Site/area/category/data_type (6 parts)
-    - Line-level: Site/area/line/category/data_type (7 parts)
-    - Equipment-level: Site/area/line/equipment/category/data_type (8 parts)
-    """
-    if not topic.startswith("Enterprise B/"):
-        return None
-
-    remainder = topic[len("Enterprise B/"):]
-    if any(remainder.startswith(p) for p in IGNORED_PREFIXES):
-        return None
-
-    parts = topic.split("/")
-    info = TopicInfo(topic=topic)
-
-    # Handle enterprise-level topics (Enterprise B/Node/... or Enterprise B/Metric/...)
-    if len(parts) >= 2 and parts[1] in ("Node", "Metric"):
-        info.site = None
-        info.area = None
-        info.category = parts[1].lower()  # 'node' or 'metric'
-        if len(parts) >= 3:
-            info.data_type = "/".join(parts[2:])
-        return info
-
-    if len(parts) >= 2:
-        info.site = parts[1] if parts[1].startswith("Site") else None
-
-    # Handle site-level topics (Enterprise B/Site/node/...)
-    if len(parts) >= 3 and parts[2] in CATEGORY_NAMES:
-        info.area = None
-        info.category = parts[2]
-        if len(parts) >= 4:
-            info.data_type = "/".join(parts[3:])
-        return info
-
-    if len(parts) >= 3:
-        info.area = parts[2]
-
-    # Detect topic depth by checking where category appears
-    if len(parts) >= 4:
-        if parts[3] in CATEGORY_NAMES:
-            # Area-level: parts[3] is category
-            info.line = None
-            info.equipment = None
-            info.category = parts[3]
-            if len(parts) >= 5:
-                info.data_type = "/".join(parts[4:])
-        elif len(parts) >= 5 and parts[4] in CATEGORY_NAMES:
-            # Line-level: parts[3] is line, parts[4] is category
-            info.line = parts[3]
-            info.equipment = None
-            info.category = parts[4]
-            if len(parts) >= 6:
-                info.data_type = "/".join(parts[5:])
-        else:
-            # Equipment-level: standard structure
-            info.line = parts[3]
-            if len(parts) >= 5:
-                info.equipment = parts[4]
-            if len(parts) >= 6:
-                info.category = parts[5]
-            if len(parts) >= 7:
-                info.data_type = "/".join(parts[6:])
-
-    return info
+def get_db_path(enterprise: str) -> str:
+    """Get database path for an enterprise."""
+    return f"proveit_{enterprise.lower()}.db"
 
 
 @dataclass
@@ -137,9 +71,11 @@ class LineMetrics:
 class DataCollector:
     """Collects MQTT data into SQLite."""
 
-    def __init__(self, db_path: str = "proveit.db", capture_raw: bool = False):
-        self.db_path = db_path
-        self.conn = get_connection(db_path)
+    def __init__(self, enterprise: str = "B", db_path: str | None = None, capture_raw: bool = False):
+        self.enterprise = enterprise.upper()
+        self.parser = get_parser(self.enterprise)
+        self.db_path = db_path or get_db_path(self.enterprise)
+        self.conn = get_connection(self.db_path)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.capture_raw = capture_raw
 
@@ -188,7 +124,7 @@ class DataCollector:
         """Process incoming MQTT message."""
         self.message_count += 1
 
-        info = parse_topic(topic)
+        info = self.parser.parse_topic(topic)
         if not info:
             return
 
@@ -981,18 +917,24 @@ class DataCollector:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Collect Enterprise B MQTT data")
+    parser = argparse.ArgumentParser(description="Collect enterprise MQTT data")
+    parser.add_argument("--enterprise", "-e", default="B",
+                       choices=list(ENTERPRISE_PARSERS.keys()),
+                       help="Enterprise to collect data from (default: B)")
     parser.add_argument("--raw", action="store_true", help="Capture raw messages")
     parser.add_argument("--reset", action="store_true", help="Reset database before starting")
     args = parser.parse_args()
 
+    enterprise = args.enterprise.upper()
+    db_path = get_db_path(enterprise)
+
     if args.reset:
         from schema import reset_db
-        reset_db()
+        reset_db(db_path)
     else:
-        init_db()
+        init_db(db_path)
 
-    collector = DataCollector(capture_raw=args.raw)
+    collector = DataCollector(enterprise=enterprise, capture_raw=args.raw)
     client = MQTTClient()
     client.add_message_handler(collector.handle_message)
 
@@ -1013,9 +955,11 @@ def main():
         print("Failed to connect to MQTT broker")
         sys.exit(1)
 
-    print("Subscribing to Enterprise B/#...")
+    subscription = collector.parser.subscription_topic
+    print(f"Subscribing to {subscription}...")
+    print(f"Database: {db_path}")
     print("Press Ctrl+C to stop\n")
-    client.subscribe("Enterprise B/#")
+    client.subscribe(subscription)
 
     try:
         client.start()
