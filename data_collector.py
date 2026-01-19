@@ -941,23 +941,58 @@ def main():
     parser.add_argument("--enterprise", "-e", default="B",
                        choices=list(ENTERPRISE_PARSERS.keys()),
                        help="Enterprise to collect data from (default: B)")
+    parser.add_argument("--all", "-a", action="store_true",
+                       help="Collect from all enterprises simultaneously")
     parser.add_argument("--raw", action="store_true", help="Capture raw messages")
     parser.add_argument("--reset", action="store_true", help="Reset database before starting")
     args = parser.parse_args()
 
-    enterprise = args.enterprise.upper()
-    db_path = get_db_path(enterprise)
+    collectors = {}
 
-    if args.reset:
-        from pathlib import Path
-        path = Path(db_path)
-        if path.exists():
-            path.unlink()
-            print(f"Deleted: {path}")
+    if args.all:
+        # Collect from all enterprises
+        enterprises = list(ENTERPRISE_PARSERS.keys())
+        for ent in enterprises:
+            db_path = get_db_path(ent)
+            if args.reset:
+                from pathlib import Path
+                path = Path(db_path)
+                if path.exists():
+                    path.unlink()
+                    print(f"Deleted: {path}")
+            collectors[ent] = get_collector(ent, capture_raw=args.raw)
+            print(f"Enterprise {ent}: {db_path}")
 
-    collector = get_collector(enterprise, capture_raw=args.raw)
-    client = MQTTClient()
-    client.add_message_handler(collector.handle_message)
+        def dispatch_message(topic: str, payload: bytes):
+            """Route message to appropriate collector based on topic."""
+            if topic.startswith("Enterprise A"):
+                collectors["A"].handle_message(topic, payload)
+            elif topic.startswith("Enterprise B"):
+                collectors["B"].handle_message(topic, payload)
+            elif topic.startswith("Enterprise C"):
+                collectors["C"].handle_message(topic, payload)
+
+        client = MQTTClient()
+        client.add_message_handler(dispatch_message)
+        subscription = "#"  # Subscribe to all
+    else:
+        # Single enterprise mode
+        enterprise = args.enterprise.upper()
+        db_path = get_db_path(enterprise)
+
+        if args.reset:
+            from pathlib import Path
+            path = Path(db_path)
+            if path.exists():
+                path.unlink()
+                print(f"Deleted: {path}")
+
+        collector = get_collector(enterprise, capture_raw=args.raw)
+        collectors[enterprise] = collector
+        client = MQTTClient()
+        client.add_message_handler(collector.handle_message)
+        subscription = collector.parser.subscription_topic
+        print(f"Database: {db_path}")
 
     stopped = False
 
@@ -976,9 +1011,7 @@ def main():
         print("Failed to connect to MQTT broker")
         sys.exit(1)
 
-    subscription = collector.parser.subscription_topic
     print(f"Subscribing to {subscription}...")
-    print(f"Database: {db_path}")
     print("Press Ctrl+C to stop\n")
     client.subscribe(subscription)
 
@@ -989,8 +1022,9 @@ def main():
     finally:
         if not stopped:
             client.stop()
-        collector.close()
-        collector.print_summary()
+        for collector in collectors.values():
+            collector.close()
+            collector.print_summary()
 
 
 if __name__ == "__main__":
