@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any
 
 from mqtt_client import MQTTClient
-from schema import get_connection, init_db
+from schema import get_connection, init_db, SCHEMA
 from parsers import TopicInfo, BaseParser, EnterpriseAParser, EnterpriseBParser, EnterpriseCParser
 
 
@@ -75,7 +75,11 @@ class DataCollector:
         self.enterprise = enterprise.upper()
         self.parser = get_parser(self.enterprise)
         self.db_path = db_path or get_db_path(self.enterprise)
-        self.conn = get_connection(self.db_path)
+        # Initialize database with threading support for MQTT background thread
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.executescript(SCHEMA)
+        self.conn.commit()
+        self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.capture_raw = capture_raw
 
