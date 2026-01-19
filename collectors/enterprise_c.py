@@ -56,6 +56,7 @@ class EnterpriseCCollector:
         # Initialize database (check_same_thread=False for MQTT background thread)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.executescript(SCHEMA_C)
+        self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.commit()
         print(f"Enterprise C database initialized: {Path(db_path).absolute()}")
 
