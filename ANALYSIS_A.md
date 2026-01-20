@@ -275,6 +275,77 @@ State changes trigger entries in `equipment_states` table with previous state fo
 
 ---
 
+## Simulator Replay Behavior
+
+> **Note**: The MQTT data is **simulated replay data** from a historical dataset. This affects data integrity and analysis.
+
+### How the Simulator Works
+
+The MQTT broker replays historical glass manufacturing data. Key characteristics:
+
+- **Steady-state operation**: Data represents continuous running, no startup/shutdown sequences
+- **Reset behavior**: When replay completes, data loops back to the start
+- **Stable IDs**: Equipment and area IDs remain consistent across replay cycles
+
+### Impact on Data
+
+| Entity | Behavior | Impact |
+|--------|----------|--------|
+| equipment | Stable IDs | No duplicates expected |
+| process_data | Continuous stream | 10-second buckets aggregate cleanly |
+| equipment_states | State transitions logged | Minimal state changes during observation |
+| oee_metrics | Per-line buckets | Overwrites per bucket, clean data |
+
+### Clean Analysis Queries
+
+**Getting accurate production stats**:
+```sql
+-- Use time-bounded queries to avoid replay overlap
+SELECT line,
+       AVG(availability) as avg_avail,
+       AVG(performance) as avg_perf,
+       AVG(quality) as avg_qual
+FROM oee_metrics
+WHERE bucket > datetime('now', '-1 hour')
+GROUP BY line;
+```
+
+---
+
+## Analysis Scripts
+
+### `analyze_data.py`
+
+Comprehensive repeatable analysis:
+
+```bash
+python analyze_data.py -e A              # Full analysis for Enterprise A
+python analyze_data.py -e A --section oee  # OEE metrics only
+```
+
+### `explore.py`
+
+General data exploration:
+
+```bash
+python explore.py -e A              # Overview of Enterprise A data
+python explore.py -e A --assets     # Equipment hierarchy
+python explore.py -e A --metrics    # Process metrics
+```
+
+---
+
+## Known Issues / Bugs
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| Limited state variety | Only state code 3 (Running) observed during collection | Expected (simulator) |
+| Fixed batch params | BatchWeight and FeedRate constant (2500 kg, 150) | Expected (consistent recipe) |
+| No product tracking | Unlike Enterprise B, no SKU/work order system | By design |
+| Utilities volume | Utilities data is ~12x production data volume | Expected |
+
+---
+
 ## SQL Examples
 
 ```sql
@@ -306,4 +377,60 @@ ORDER BY es.timestamp DESC LIMIT 50;
 SELECT bucket, line, availability, performance, quality, oee
 FROM oee_metrics
 ORDER BY bucket DESC LIMIT 50;
+
+-- Average furnace temperature by line
+SELECT
+    e.line,
+    COUNT(*) as samples,
+    AVG(pd.temperature) as avg_temp,
+    MIN(pd.temperature) as min_temp,
+    MAX(pd.temperature) as max_temp
+FROM process_data pd
+JOIN equipment e ON pd.equipment_id = e.id
+WHERE pd.temperature IS NOT NULL
+GROUP BY e.line;
+
+-- Silo material inventory
+SELECT
+    e.name as silo,
+    pd.material,
+    AVG(pd.level_pct) as avg_level,
+    MIN(pd.level_pct) as min_level,
+    MAX(pd.level_pct) as max_level
+FROM process_data pd
+JOIN equipment e ON pd.equipment_id = e.id
+WHERE pd.level_pct IS NOT NULL
+GROUP BY e.name, pd.material;
+
+-- OEE trend over time
+SELECT
+    strftime('%Y-%m-%d %H:00', bucket) as hour,
+    AVG(availability) as avail,
+    AVG(performance) as perf,
+    AVG(quality) as qual,
+    AVG(oee) as oee
+FROM oee_metrics
+GROUP BY hour
+ORDER BY hour;
+
+-- Utility readings summary
+SELECT
+    category,
+    equipment,
+    measurement,
+    COUNT(*) as readings,
+    AVG(value) as avg_value
+FROM utility_readings
+GROUP BY category, equipment, measurement
+ORDER BY readings DESC
+LIMIT 20;
+
+-- Inspector pass/reject rates (if available)
+SELECT
+    e.line,
+    SUM(sr.value) as total_count
+FROM sensor_readings sr
+JOIN equipment e ON sr.equipment_id = e.id
+WHERE sr.sensor_name LIKE '%count%'
+GROUP BY e.line;
 ```

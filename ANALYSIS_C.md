@@ -277,6 +277,91 @@ The CHR01 chromatography unit has specialized tags:
 
 ---
 
+## Simulator Replay Behavior
+
+> **Note**: The MQTT data is **simulated replay data** from a historical biotech batch process. This affects data integrity and analysis.
+
+### How the Simulator Works
+
+The MQTT broker replays historical batch process data. Key characteristics:
+
+- **Batch-centric**: Data represents ongoing batch processes (cell culture, purification)
+- **Lower frequency**: ~20 msg/sec (vs ~150 msg/sec for glass) due to batch nature
+- **Long cycles**: Biotech batches run hours/days, not seconds
+- **Reset behavior**: When replay completes, batches restart with new IDs
+
+### Impact on Data
+
+| Entity | Behavior | Impact |
+|--------|----------|--------|
+| batches | New IDs on replay | Same batch_id may appear multiple times across resets |
+| tags | Stable definitions | No duplicates expected |
+| tag_values | Continuous stream | Time-series values aggregate cleanly |
+| phases | Phase transitions | Sparse transitions, may miss rapid changes |
+
+### Clean Analysis Queries
+
+**Getting accurate tag values without replay overlap**:
+```sql
+-- Use time-bounded queries to avoid replay overlap
+SELECT
+    t.tag_name,
+    tv.value_type,
+    AVG(tv.value_numeric) as avg_value,
+    COUNT(*) as samples
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+WHERE tv.timestamp > datetime('now', '-1 hour')
+  AND tv.value_numeric IS NOT NULL
+GROUP BY t.tag_name, tv.value_type;
+```
+
+**Filtering by specific batch**:
+```sql
+-- Get data for a specific batch
+SELECT b.batch_id, b.recipe_name, tv.*
+FROM batches b
+JOIN tag_values tv ON tv.timestamp BETWEEN b.start_time AND COALESCE(b.end_time, 'now')
+WHERE b.batch_id = '2025120842503';
+```
+
+---
+
+## Analysis Scripts
+
+### `analyze_data.py`
+
+Comprehensive repeatable analysis:
+
+```bash
+python analyze_data.py -e C              # Full analysis for Enterprise C
+python analyze_data.py -e C --section tags  # Tag analysis only
+```
+
+### `explore.py`
+
+General data exploration:
+
+```bash
+python explore.py -e C              # Overview of Enterprise C data
+python explore.py -e C --tags       # Tag hierarchy
+python explore.py -e C --batches    # Current batch status
+```
+
+---
+
+## Known Issues / Bugs
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| Phase gaps | Phase transitions not fully captured | Open |
+| Sparse operator messages | Operator prompts/acknowledgments infrequent | Expected |
+| No yield calculation | No titer or yield metrics calculated | By design |
+| Dual topic structure | Data split between flat and hierarchical topics | By design |
+| AIC-250-002 unknown | Unknown measurement type | Needs investigation |
+
+---
+
 ## Data Quality Notes
 
 ### Simulator Characteristics
@@ -333,6 +418,96 @@ SELECT value_type, COUNT(*) as count
 FROM tag_values
 GROUP BY value_type
 ORDER BY count DESC;
+
+-- Temperature control analysis (PV vs SP deviation)
+SELECT
+    t.tag_name,
+    COUNT(*) as samples,
+    AVG(tv.value_numeric) as avg_value,
+    MIN(tv.value_numeric) as min_value,
+    MAX(tv.value_numeric) as max_value,
+    tv.value_type
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+WHERE t.tag_type = 'TIC'
+GROUP BY t.tag_name, tv.value_type
+ORDER BY t.tag_name, tv.value_type;
+
+-- Bioreactor critical parameters (SUB250)
+SELECT
+    t.tag_name,
+    t.tag_type,
+    tv.value_type,
+    AVG(tv.value_numeric) as avg_value,
+    t.engineering_unit
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+JOIN units u ON t.unit_id = u.id
+WHERE u.code = 'sub'
+  AND tv.value_type = 'PV'
+  AND tv.value_numeric IS NOT NULL
+GROUP BY t.tag_name, t.tag_type, tv.value_type, t.engineering_unit;
+
+-- Chromatography UV trace
+SELECT
+    tv.timestamp,
+    t.tag_name,
+    tv.value_numeric as absorbance
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+WHERE t.tag_name LIKE 'CHR01_AT%'
+ORDER BY tv.timestamp DESC LIMIT 200;
+
+-- Time-series trend for specific tag (hourly averages)
+SELECT
+    strftime('%Y-%m-%d %H:00', tv.timestamp) as hour,
+    t.tag_name,
+    AVG(tv.value_numeric) as avg_value,
+    COUNT(*) as samples
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+WHERE t.tag_name = 'TIC-250-001'
+  AND tv.value_type = 'PV'
+GROUP BY hour, t.tag_name
+ORDER BY hour;
+
+-- Join tags, values, and batches (active batch context)
+SELECT
+    b.batch_id,
+    b.recipe_name,
+    t.tag_name,
+    tv.value_type,
+    AVG(tv.value_numeric) as avg_value
+FROM batches b
+CROSS JOIN tags t
+JOIN tag_values tv ON tv.tag_id = t.id
+WHERE t.tag_type IN ('TIC', 'AIC', 'SIC')
+  AND tv.value_type = 'PV'
+GROUP BY b.batch_id, b.recipe_name, t.tag_name, tv.value_type;
+
+-- Controller status (ACTIVE flags)
+SELECT
+    t.tag_name,
+    tv.value_type,
+    SUM(CASE WHEN tv.value_numeric = 1 THEN 1 ELSE 0 END) as active_count,
+    SUM(CASE WHEN tv.value_numeric = 0 THEN 1 ELSE 0 END) as inactive_count
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+WHERE tv.value_type = 'ACTIVE'
+GROUP BY t.tag_name, tv.value_type;
+
+-- Filtration (TFF) pressure monitoring
+SELECT
+    t.tag_name,
+    AVG(tv.value_numeric) as avg_pressure,
+    MIN(tv.value_numeric) as min_pressure,
+    MAX(tv.value_numeric) as max_pressure
+FROM tag_values tv
+JOIN tags t ON tv.tag_id = t.id
+JOIN units u ON t.unit_id = u.id
+WHERE u.code = 'tff'
+  AND t.tag_type = 'PI'
+GROUP BY t.tag_name;
 ```
 
 ---
