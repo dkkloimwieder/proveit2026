@@ -385,6 +385,73 @@ MQTT Equipment-level metric topic:
 
 ---
 
+## Operational Analysis
+
+This section provides real-time interpretation of the beverage production process.
+
+### Current Production Status
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   MIX (Stage 1) │     │  FILL (Stage 2) │     │  PACK (Stage 3) │     │ PALLETIZE (S4)  │
+│   liquidprocess │ ──► │ fillerproduction│ ──► │    packaging    │ ──► │   palletizing   │
+│                 │     │                 │     │                 │     │                 │
+│  UOM: kg        │     │  UOM: bottle    │     │  UOM: CS        │     │  UOM: pallet    │
+│  Product: Mix   │     │  Product: Bottle│     │  Product: Pack  │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### Multi-Site Operation
+
+| Site | Lines | Primary Products |
+|------|-------|------------------|
+| Site1 | fillingline01-03, labelerline01-04 | Cola & Orange packs |
+| Site2 | fillingline01-02, labelerline01-02, mixroom01 | Cola & Orange mixes |
+| Site3 | fillingline01, labelerline01, mixroom01 | Cola & Orange |
+
+### Equipment State Distribution
+
+| State | Events | % | Description |
+|-------|--------|---|-------------|
+| Running | 7,604 | 46% | Active production |
+| Idle | 5,658 | 34% | Waiting for work |
+| Unplanned Downtime | 1,519 | 9% | Equipment issues |
+| CIP | 326 | 2% | Clean-in-place |
+| Other (Transfer, Cool, Mix, Fill, etc.) | 1,727 | 10% | Process states |
+
+### Active Work Orders (Sample)
+
+| Work Order | Product | Site/Line | Actual | Target | Status |
+|------------|---------|-----------|--------|--------|--------|
+| WO-L04-1420 | - | Site2/fillingline01 | 89,570 | 56,000 | 160% (Overrun) |
+| WO-L03-0290-P24 | Pack | Site2/labelerline02 | 766 | 9,000 | 9% (In Progress) |
+| WO-L02-1164 | - | Site3/labelerline01 | 24,687 | 9,000 | 274% (Overrun) |
+| WO-L04-0720-P24 | Pack | Site1/labelerline04 | 24,630 | 7,000 | 352% (Overrun) |
+
+**Note**: Overruns are normal - targets appear to be minimums, not hard limits.
+
+### Cross-Site Work Order Flow
+
+Work orders track product through the entire manufacturing chain:
+
+```
+WO-L04-1420:
+  Site2/fillingline01 (bottles)  → fills bottles
+  Site2/labelerline01 (cases)    → packs into cases (WO-L04-1420-P24)
+  Site3/mixroom01 (kg)           → supplies mix (WO-L04-1420-P04)
+```
+
+### What This Tells Us
+
+1. **Multi-site production** - Same WO number tracked across different sites/stages
+2. **High utilization** - 46% running, 34% idle (waiting for upstream)
+3. **Target flexibility** - WOs routinely exceed targets (targets are minimums)
+4. **Discrete + batch** - Mix stage is batch, Fill/Pack are discrete
+5. **Pack variants** - Same base WO spawns multiple pack sizes (-P04, -P12, -P24)
+6. **CIP cycles** - Regular cleaning between product changeovers
+
+---
+
 ## Simulator Replay Behavior
 
 > **⚠️ CRITICAL**: The MQTT data is **simulated replay data** from a historical dataset. This affects data integrity and analysis.

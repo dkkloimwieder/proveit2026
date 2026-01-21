@@ -277,6 +277,108 @@ The CHR01 chromatography unit has specialized tags:
 
 ---
 
+## Operational Analysis
+
+This section provides real-time interpretation of the biotech batch process.
+
+### Current Production Status
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  SUB250      │     │  SUM500      │     │  TFF         │     │  CHR01       │
+│  Bioreactor  │ ──► │  Media Prep  │ ──► │  Filtration  │ ──► │  Chromat.    │
+│              │     │              │     │              │     │              │
+│  ■ RUNNING   │     │  □ IDLE      │     │  □ IDLE      │     │  □ IDLE      │
+│  Cell Growth │     │  Feed Prep   │     │  Concentrate │     │  Purify      │
+└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+```
+
+**Product**: rBMN-42 (recombinant protein)
+
+### Active Batch Status
+
+| Batch ID | Recipe | Product | Unit | Status |
+|----------|--------|---------|------|--------|
+| 2025120842503 | PR_SUB_PROC | rBMN-42 | SUB | **Running** |
+| 2025120842501 | PR_SUM_MEDIA | rBMN-42 | SUM | Idle |
+| 2025112945204 | PROCESS | rBMN-42 | - | - |
+| 2025112942503 | PROC | rBMN-42 | CHROM | Idle |
+
+### Bioreactor Control (SUB250)
+
+The bioreactor is actively running a cell culture batch. Real-time measurements show tight process control:
+
+| Parameter | Tag | Typical Value | Setpoint | Interpretation |
+|-----------|-----|---------------|----------|----------------|
+| **Temperature 1** | TIC-250-001 | 29.7-29.9°C | 30.0°C | Culture temperature - mammalian cells |
+| **Temperature 2** | TIC-250-002 | 59.6-59.8°C | 60.0°C | Jacket heating - maintains culture temp |
+| **Dissolved O2** | AIC-250-001 | 30-32% | 30% | Oxygen for cell respiration |
+| **pH** | AIC-250-003 | 5.45-5.50 | 5.5 | Culture pH - critical for viability |
+| **Agitator Speed** | SIC-250-008 | ~400 RPM | 400 RPM | Mixing for O2 transfer |
+| **Vessel Weight** | WI-250-001 | 170 kg | - | Media volume indicator |
+| **Sparge Air** | FIC-250-001 | 10 SLPM | 10 SLPM | Primary aeration |
+| **Gas Flow 2** | FIC-250-002 | 2-4 SLPM | ~2.3 SLPM | Secondary gas (N2/CO2) |
+| **Overlay Gas** | FIC-250-003 | 2 SLPM | 2 SLPM | Headspace blanket |
+| **Pressure** | PIC-250-001 | 0.09 psi | 0.1 psi | Slight positive pressure |
+
+**Control Performance**: All critical parameters within 1% of setpoint - excellent control.
+
+### Fed-Batch Process Indicators
+
+Operator messages indicate fed-batch fermentation:
+
+| Message | Interpretation |
+|---------|----------------|
+| "Adding antifoam" | Foam control during active fermentation |
+| "Starting Base Addition" | pH adjustment (cells produce acid) |
+| "Acknowledge to end Feed-Phase and stop pump" | Nutrient feed cycle complete |
+| "Acknowledge when ready to start transfer in of Feed 1" | Preparing next feed addition |
+
+**What is Fed-Batch?** Unlike continuous culture, fed-batch adds nutrients periodically to extend the growth phase and maximize protein production. The operator messages show active feed management.
+
+### Downstream Units (Idle)
+
+**TFF (Tangential Flow Filtration)**:
+- Phase: IDLE
+- All pumps stopped (flows at 0)
+- Temperature: 20°C (ambient)
+- Waiting for harvest from bioreactor
+
+**Chromatography (CHR01)**:
+- UV Detector: 7.2 AU (baseline)
+- All valves closed
+- Waiting for concentrated product
+
+### Process Sequence
+
+```
+1. UPSTREAM (Current)
+   └── SUB250 Bioreactor: Cell growth producing rBMN-42 protein
+       └── Duration: Days (mammalian cell culture)
+       └── Fed-batch feeding to maximize titer
+
+2. HARVEST (Pending)
+   └── Transfer culture to downstream processing
+   └── Triggered when growth phase complete
+
+3. DOWNSTREAM (Waiting)
+   └── TFF: Concentrate and diafilter the harvest
+   └── Chromatography: Purify protein from host cell proteins
+   └── Multiple chromatography steps typical (Protein A, IEX, etc.)
+```
+
+### What This Tells Us
+
+1. **Active fermentation** - SUB250 running a mammalian cell culture for protein production
+2. **Fed-batch mode** - Nutrient feeds being added to extend growth phase
+3. **Tight control** - All critical parameters (T, pH, DO) within 1% of setpoint
+4. **Sequential process** - Downstream units idle, waiting for upstream completion
+5. **Long cycle times** - Biotech batches run days, not hours
+6. **Single product** - All batches producing rBMN-42 (recombinant protein)
+7. **ISA-88 compliance** - Proper batch tracking with recipe/formula management
+
+---
+
 ## Simulator Replay Behavior
 
 > **Note**: The MQTT data is **simulated replay data** from a historical biotech batch process. This affects data integrity and analysis.

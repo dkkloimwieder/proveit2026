@@ -261,6 +261,81 @@ State changes trigger entries in `equipment_states` table with previous state fo
 
 ---
 
+## Operational Analysis
+
+This section provides real-time interpretation of the glass manufacturing process.
+
+### Current Production Status
+
+**All 4 production lines are RUNNING (State Code 3)**
+
+The entire glass plant operates in steady-state continuous production mode. Unlike batch processes, glass manufacturing runs 24/7 - furnaces cannot be shut down without destroying the refractory lining.
+
+### Process Flow Interpretation
+
+```
+RAW MATERIALS          MELTING              FORMING              FINISHING
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ Silo01: 75% │     │   Furnace   │     │  ISMachine  │     │    Lehr     │
+│ Silica Sand │     │   2705°C    │     │   Forming   │     │  Annealing  │
+├─────────────┤     │             │     │   bottles   │     │             │
+│ Silo02: 69% │ ──► │ Forehearth  │ ──► │             │ ──► │  Inspector  │
+│ Soda Ash    │     │   2050°C    │     │             │     │   Quality   │
+├─────────────┤     │             │     │             │     │             │
+│ Silo03: 82% │     │             │     │             │     │ Palletizer  │
+│ Limestone   │     │             │     │             │     │  Packaging  │
+├─────────────┤     └─────────────┘     └─────────────┘     └─────────────┘
+│ Silo04: 45% │
+│ Cullet      │
+└─────────────┘
+  BatchMixer
+  2500 kg/batch
+  Feed: 150 units
+```
+
+### Raw Materials (BatchHouse)
+
+| Silo | Material | Level | Purpose |
+|------|----------|-------|---------|
+| Silo01 | Silica Sand | 75% | Primary glass former (SiO2) |
+| Silo02 | Soda Ash | 69% | Flux - lowers melting point (Na2CO3) |
+| Silo03 | Limestone | 82% | Stabilizer (CaCO3) |
+| Silo04 | Cullet | 45% | Recycled glass - reduces energy |
+
+**Batch Recipe**: Fixed at 2,500 kg per batch with 150 unit feed rate, indicating consistent glass formulation.
+
+**Note**: Silo04 (Cullet) at 45% is the lowest - cullet supply may need monitoring.
+
+### Temperature Zones (HotEnd)
+
+| Equipment | Temperature | Function |
+|-----------|-------------|----------|
+| Furnace | 2,705°C | Melting zone - raw materials → molten glass |
+| Forehearth | 2,050°C | Conditioning - homogenize temperature for forming |
+
+The 655°C temperature drop from Furnace to Forehearth is intentional - glass must cool to the right viscosity for the IS Machine to form bottles.
+
+### OEE Performance
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Availability | 98.5% | Excellent - minimal unplanned downtime |
+| Performance | 101.7% | Above standard rate (possibly conservative standard) |
+| Quality | 97.9% | ~2% reject rate at inspection |
+
+**Overall Equipment Effectiveness**: The plant is operating at high efficiency with minimal losses.
+
+### What This Tells Us
+
+1. **Continuous operation** - Glass plants don't stop; furnace refractory would be damaged
+2. **Stable process** - Fixed batch weights and temperatures indicate recipe consistency
+3. **High efficiency** - 98%+ availability is excellent for continuous manufacturing
+4. **Quality focus** - Inspector catches ~2% defects before packaging
+5. **Cullet usage** - Recycled glass reduces energy consumption and raw material costs
+6. **No work orders** - Unlike beverage (Enterprise B), glass is continuous flow, not discrete batches
+
+---
+
 ## Data Quality Notes
 
 ### Simulator Characteristics
